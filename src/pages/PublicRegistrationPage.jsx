@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Loader2, ArrowRight, Languages, User, Smartphone, AlertCircle, Info, FileText } from 'lucide-react';
 import { DisclaimerDialog } from '@/components/DisclaimerDialog';
-import { printDocuments } from '@/lib/print';
+import { downloadServiceTicketPdf, printDocuments } from '@/lib/print';
 import { formTranslations } from '@/lib/formTranslations';
 import { getDisplayVersion } from '@/lib/version';
 
@@ -132,11 +132,12 @@ export default function PublicRegistrationPage() {
         throw new Error('Kunde inte skapa ärende');
       }
       
+      downloadServiceTicketPdf(newTicket, lang);
       printDocuments(newTicket, lang);
 
       toast({
         title: t.toast.successTitle,
-        description: `${t.toast.successDescription} #${newTicket.ticket_number}. ${t.toast.printStarted}`,
+        description: `${t.toast.successDescription} #${newTicket.ticket_number}. ${t.toast.printStarted} PDF skapad.`,
       });
       
       setFormData({
