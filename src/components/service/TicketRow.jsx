@@ -70,6 +70,7 @@ export const TicketRow = ({ ticket, onUpdate }) => {
   const [selectedMessage, setSelectedMessage] = useState(null);
   const { toast } = useToast();
   const customerDecision = decisionMap[ticket.last_customer_decision] || null;
+  const hasNewCustomerMessage = Boolean(ticket.has_new_customer_message);
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
   const sortedMessages = useMemo(
     () => [...messages].sort((a, b) => new Date(a.created_at) - new Date(b.created_at)),
@@ -320,7 +321,13 @@ export const TicketRow = ({ ticket, onUpdate }) => {
         <div className="w-2/12 font-semibold text-gray-800">#{ticket.ticket_number}</div>
         <div className="w-3/12 text-gray-700">{ticket.customer_name}</div>
         <div className="w-3/12 text-gray-600">{ticket.device_type}</div>
-        <div className="w-3/12 text-right">
+        <div className="w-3/12 text-right flex items-center gap-2 justify-end">
+          {hasNewCustomerMessage && (
+            <Badge className="bg-blue-100 text-blue-800 border border-blue-200 font-medium">
+              <MessageSquare size={12} className="mr-1" />
+              Nytt meddelande
+            </Badge>
+          )}
           <Badge className={`${statusStyles[ticket.status] || statusStyles['Nytt']} font-medium`}>{ticket.status}</Badge>
         </div>
       </div>

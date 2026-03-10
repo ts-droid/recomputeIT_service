@@ -1103,7 +1103,23 @@ const sendEmail = async ({ to, subject, body }) => {
 app.get('/api/tickets', requireAuth, async (_req, res) => {
   try {
     const { rows } = await query(
-      'SELECT * FROM service_tickets ORDER BY created_at DESC'
+      `
+        SELECT
+          t.*,
+          inbound.last_inbound_message_at,
+          (
+            inbound.last_inbound_message_at IS NOT NULL
+            AND inbound.last_inbound_message_at > COALESCE(t.last_staff_contact_at, 'epoch'::timestamptz)
+          ) AS has_new_customer_message
+        FROM service_tickets t
+        LEFT JOIN LATERAL (
+          SELECT MAX(created_at) AS last_inbound_message_at
+          FROM message_logs
+          WHERE ticket_id = t.id
+            AND direction = 'inbound'
+        ) inbound ON TRUE
+        ORDER BY t.created_at DESC
+      `
     );
     res.json(rows);
   } catch (error) {

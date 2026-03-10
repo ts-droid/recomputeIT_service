@@ -9,7 +9,17 @@ import { TicketRow } from '@/components/service/TicketRow';
 export function ServiceRegister() {
   const { tickets, loading, updateTicket } = useServiceTickets();
   const [searchTerm, setSearchTerm] = useState('');
-  const [showHidden, setShowHidden] = useState(false);
+  const [showCompleted, setShowCompleted] = useState(false);
+
+  const isCompletedTicket = (ticket) => {
+    const normalizedStatus = (ticket.status || '').toString().trim().toLowerCase();
+    return (
+      normalizedStatus === 'färdig' ||
+      normalizedStatus === 'avslutad' ||
+      Boolean(ticket.closed_at) ||
+      Boolean(ticket.picked_up_at)
+    );
+  };
 
   const filteredTickets = tickets.filter(ticket => {
     const matchesSearch = searchTerm === '' ||
@@ -19,9 +29,9 @@ export function ServiceRegister() {
 
     if (!matchesSearch) return false;
 
-    if (searchTerm) return true;
+    if (searchTerm.trim()) return true;
 
-    return showHidden ? ticket.is_hidden : !ticket.is_hidden;
+    return showCompleted ? isCompletedTicket(ticket) : !isCompletedTicket(ticket);
   });
   
   if (loading) {
@@ -44,12 +54,12 @@ export function ServiceRegister() {
         />
         <div className="flex items-center space-x-2 pt-2 sm:pt-0">
           <Checkbox
-            id="show-hidden"
-            checked={showHidden}
-            onCheckedChange={setShowHidden}
+            id="show-completed"
+            checked={showCompleted}
+            onCheckedChange={setShowCompleted}
           />
-          <Label htmlFor="show-hidden" className="text-sm font-medium text-gray-700 cursor-pointer">
-            Visa dolda ärenden
+          <Label htmlFor="show-completed" className="text-sm font-medium text-gray-700 cursor-pointer">
+            Visa avslutade ärenden
           </Label>
         </div>
       </div>
