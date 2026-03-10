@@ -469,6 +469,35 @@ const localizeTicketFreeText = async (ticket, language) => {
   };
 };
 
+const buildNotificationPreview = async ({ templateType, ticket, language }) => {
+  const localizedTicket = await localizeTicketFreeText(ticket, language);
+
+  if (templateType === 'kostnadsforslag') {
+    const amount = ticket.final_cost || '—';
+    const messageBase =
+      textTemplates.costProposal[language]?.(localizedTicket, amount) ||
+      textTemplates.costProposal.sv(localizedTicket, amount);
+    const sms = await translateIfNeeded(messageBase, language);
+    const template =
+      emailTemplates.costProposal[language]?.(localizedTicket, amount) ||
+      emailTemplates.costProposal.sv(localizedTicket, amount);
+    const subject = await translateIfNeeded(template.subject, language);
+    const body = await translateIfNeeded(template.body, language);
+    return { subject, body, sms };
+  }
+
+  const messageBase =
+    textTemplates.repairReady[language]?.(localizedTicket) ||
+    textTemplates.repairReady.sv(localizedTicket);
+  const sms = await translateIfNeeded(messageBase, language);
+  const template =
+    emailTemplates.repairReady[language]?.(localizedTicket) ||
+    emailTemplates.repairReady.sv(localizedTicket);
+  const subject = await translateIfNeeded(template.subject, language);
+  const body = await translateIfNeeded(template.body, language);
+  return { subject, body, sms };
+};
+
 const sendSms = async ({ to, message }) => {
   if (!ELKS_API_USERNAME || !ELKS_API_PASSWORD) {
     throw new Error('SMS credentials missing');
@@ -910,6 +939,48 @@ app.post('/api/admin/test-email', requireAuth, requireRole('admin'), async (req,
       error: 'Kunde inte skicka testmail.',
       details: error?.message || 'Okänt fel',
     });
+  }
+});
+
+app.post('/api/preview-notification', requireAuth, requireRole('service'), async (req, res) => {
+  try {
+    const {
+      ticketId,
+      templateType,
+      language: requestedLanguage,
+      diagnosis,
+      work_done_summary,
+      final_cost,
+    } = req.body || {};
+
+    if (!ticketId || !templateType) {
+      return res.status(400).json({ error: 'ticketId och templateType krävs.' });
+    }
+
+    const { rows } = await query('SELECT * FROM service_tickets WHERE id = $1', [ticketId]);
+    const ticket = rows[0];
+    if (!ticket) {
+      return res.status(404).json({ error: 'Ärende hittades inte.' });
+    }
+
+    const language = requestedLanguage || getLanguage(ticket);
+    const previewTicket = {
+      ...ticket,
+      diagnosis: diagnosis ?? ticket.diagnosis,
+      work_done_summary: work_done_summary ?? ticket.work_done_summary,
+      final_cost: final_cost ?? ticket.final_cost,
+    };
+
+    const preview = await buildNotificationPreview({
+      templateType,
+      ticket: previewTicket,
+      language,
+    });
+
+    return res.json({ ok: true, language, ...preview });
+  } catch (error) {
+    console.error('POST /api/preview-notification error:', error);
+    return res.status(500).json({ error: 'Kunde inte generera förhandsvisning.' });
   }
 });
 

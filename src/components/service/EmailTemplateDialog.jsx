@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,14 +38,13 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
   const { token } = useSupabaseAuth();
   const [costProposal, setCostProposal] = useState('');
   const [diagnosis, setDiagnosis] = useState('');
-  const [translatedDiagnosis, setTranslatedDiagnosis] = useState('');
   const [copied, setCopied] = useState(false);
   const [currentLang, setCurrentLang] = useState('sv');
-  const [isTranslating, setIsTranslating] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [previewContent, setPreviewContent] = useState({ subject: '', body: '' });
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const { toast } = useToast();
 
-  const debounceTimeoutRef = useRef(null);
   const isCostProposal = templateType === 'kostnadsforslag';
   const placeholderText = translationPlaceholders[currentLang] || translationPlaceholders.sv;
 
@@ -61,14 +60,6 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
     }
   }, [ticket]);
 
-  useEffect(() => {
-    if (debounceTimeoutRef.current) {
-      clearTimeout(debounceTimeoutRef.current);
-    }
-    setIsTranslating(false);
-    setTranslatedDiagnosis(diagnosis);
-  }, [diagnosis, currentLang]);
-
   const emailContent = useMemo(() => {
     if (!ticket || !templateType) {
       return { subject: '', body: '' };
@@ -76,15 +67,61 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
     
     const tempTicket = {
       ...ticket,
-      diagnosis: translatedDiagnosis || diagnosis, // Use translated or original
+      diagnosis,
       final_cost: costProposal,
     };
 
     return generateEmailContent(tempTicket, templateType, currentLang);
-  }, [ticket, templateType, currentLang, diagnosis, translatedDiagnosis, costProposal]);
+  }, [ticket, templateType, currentLang, diagnosis, costProposal]);
+
+  useEffect(() => {
+    if (!open || !ticket || !templateType || !token) return;
+
+    const run = async () => {
+      setIsPreviewLoading(true);
+      try {
+        const response = await fetch('/api/preview-notification', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            ticketId: ticket.id,
+            templateType,
+            language: currentLang,
+            diagnosis,
+            work_done_summary: ticket.work_done_summary || '',
+            final_cost: costProposal,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('preview failed');
+        }
+
+        const data = await response.json();
+        setPreviewContent({
+          subject: data?.subject || '',
+          body: data?.body || '',
+        });
+      } catch (error) {
+        console.error('Preview generation error:', error);
+        setPreviewContent({ subject: '', body: '' });
+      } finally {
+        setIsPreviewLoading(false);
+      }
+    };
+
+    const timer = setTimeout(run, 300);
+    return () => clearTimeout(timer);
+  }, [open, ticket, templateType, token, currentLang, diagnosis, costProposal]);
+
+  const effectiveSubject = previewContent.subject || emailContent?.subject || '';
+  const effectiveBody = previewContent.body || emailContent?.body || '';
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(emailContent.body);
+    navigator.clipboard.writeText(effectiveBody);
     setCopied(true);
     toast({
       title: "Kopierat!",
@@ -243,7 +280,7 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
             <div className="space-y-2">
               <Label htmlFor="diagnosis" className="flex items-center gap-2">
                 Diagnos 
-                {isTranslating && <Sparkles size={16} className="text-purple-500 animate-pulse" />}
+                {isPreviewLoading && <Sparkles size={16} className="text-purple-500 animate-pulse" />}
               </Label>
                <Textarea
                 id="diagnosis"
@@ -280,11 +317,11 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
         <div className="bg-gray-100 p-4 rounded-md space-y-4 max-h-80 overflow-y-auto border border-gray-200">
           <div>
             <Label className="font-semibold text-gray-800">E-post Ämne</Label>
-            <p className="text-sm bg-white p-2 rounded-md mt-1">{emailContent?.subject || ''}</p>
+            <p className="text-sm bg-white p-2 rounded-md mt-1">{effectiveSubject}</p>
           </div>
           <div>
             <Label className="font-semibold text-gray-800">E-post Innehåll</Label>
-            <div className="text-sm bg-white p-3 rounded-md mt-1 whitespace-pre-wrap">{emailContent?.body || ''}</div>
+            <div className="text-sm bg-white p-3 rounded-md mt-1 whitespace-pre-wrap">{effectiveBody}</div>
           </div>
         </div>
 
