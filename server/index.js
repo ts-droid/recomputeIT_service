@@ -976,7 +976,7 @@ app.post('/api/webhooks/46elks', async (req, res) => {
         `UPDATE service_tickets
          SET cost_proposal_approved = false, status = $1
          WHERE id = $2`,
-        ['Väntar på kund', ticket.id]
+        ['Kostnadsförslag nekat', ticket.id]
       );
     }
 

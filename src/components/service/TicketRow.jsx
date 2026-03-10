@@ -16,7 +16,8 @@ const statusStyles = {
   "Nytt": "bg-blue-100 text-blue-800",
   "Pågående": "bg-yellow-100 text-yellow-800",
   "Väntar på kund": "bg-orange-100 text-orange-800",
-  "Kostnadsförslag godkänt": "bg-teal-100 text-teal-800",
+  "Kostnadsförslag godkänt": "bg-green-100 text-green-800",
+  "Kostnadsförslag nekat": "bg-red-100 text-red-800",
   "Färdig": "bg-green-100 text-green-800",
   "Avslutad": "bg-gray-100 text-gray-800",
 };
