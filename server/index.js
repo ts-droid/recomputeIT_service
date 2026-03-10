@@ -222,6 +222,9 @@ const mailer = SMTP_HOST
       port: SMTP_PORT,
       secure: SMTP_PORT === 465,
       auth: SMTP_USER ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+      socketTimeout: 20000,
     })
   : null;
 
@@ -565,7 +568,12 @@ app.post('/api/admin/test-email', requireAuth, requireRole('admin'), async (req,
     await sendEmail({ to, subject, body });
     res.json({ ok: true });
   } catch (error) {
-    console.error('POST /api/admin/test-email error:', error);
+    console.error('POST /api/admin/test-email error:', {
+      message: error?.message,
+      code: error?.code,
+      command: error?.command,
+      response: error?.response,
+    });
     res.status(500).json({
       error: 'Kunde inte skicka testmail.',
       details: error?.message || 'Okänt fel',

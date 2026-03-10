@@ -156,7 +156,10 @@ export function AdminPanel() {
         body: JSON.stringify({ to: testEmail }),
       });
 
-      if (!response.ok) throw new Error('Test email error');
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.details || payload?.error || 'Test email error');
+      }
 
       toast({
         title: 'Testmail skickat',
@@ -166,7 +169,7 @@ export function AdminPanel() {
       console.error('Test email error:', error);
       toast({
         title: 'Kunde inte skicka testmail',
-        description: 'Kontrollera SMTP-inställningarna.',
+        description: error?.message || 'Kontrollera SMTP/Resend-inställningarna.',
         variant: 'destructive',
       });
     } finally {
