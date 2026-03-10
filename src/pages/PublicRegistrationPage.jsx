@@ -64,6 +64,7 @@ export default function PublicRegistrationPage() {
     customer_phone_country_code: '+46',
     customer_email: '',
     customer_phone: '',
+    preferred_contact_channel: '',
     device_type: '',
     device_model: '',
     issue_description: '',
@@ -81,7 +82,18 @@ export default function PublicRegistrationPage() {
   
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => {
+      const next = { ...prev, [name]: value };
+      const hasPhone = Boolean(next.customer_phone?.trim());
+      const hasEmail = Boolean(next.customer_email?.trim());
+      if (hasPhone && !hasEmail) next.preferred_contact_channel = 'sms';
+      if (hasEmail && !hasPhone) next.preferred_contact_channel = 'email';
+      if (!hasPhone && !hasEmail) next.preferred_contact_channel = '';
+      if (hasPhone && hasEmail && !['sms', 'email'].includes(next.preferred_contact_channel)) {
+        next.preferred_contact_channel = '';
+      }
+      return next;
+    });
   };
 
   const handleSelectChange = (name, value) => {
@@ -95,11 +107,20 @@ export default function PublicRegistrationPage() {
   };
   
   const validateForm = () => {
-    const { customer_name, customer_lastname, customer_phone, customer_email, device_type, issue_description } = formData;
-    if (!customer_name || !customer_lastname || !customer_phone || !customer_email || !device_type || !issue_description) {
+    const { customer_name, customer_lastname, customer_phone, customer_email, preferred_contact_channel, device_type, issue_description } = formData;
+    const hasPhone = Boolean(customer_phone?.trim());
+    const hasEmail = Boolean(customer_email?.trim());
+    const hasAnyContact = hasPhone || hasEmail;
+    const hasPreferredWhenBoth = !(hasPhone && hasEmail) || ['sms', 'email'].includes(preferred_contact_channel);
+
+    if (!customer_name || !customer_lastname || !device_type || !issue_description || !hasAnyContact || !hasPreferredWhenBoth) {
       toast({
         title: t.toast.incompleteTitle,
-        description: t.toast.incompleteDescription,
+        description: !hasAnyContact
+          ? 'Ange minst telefonnummer eller e-postadress.'
+          : !hasPreferredWhenBoth
+            ? 'Välj primär kontaktväg (SMS eller e-post).'
+            : t.toast.incompleteDescription,
         variant: 'destructive',
       });
       return false;
@@ -124,6 +145,7 @@ export default function PublicRegistrationPage() {
         email: formData.customer_email,
         phone: formData.customer_phone,
         phoneCountryCode: formData.customer_phone_country_code,
+        preferredContactChannel: formData.preferred_contact_channel,
         deviceType: formData.device_type,
         deviceModel: formData.device_model,
         problemDescription: formData.issue_description,
@@ -145,6 +167,7 @@ export default function PublicRegistrationPage() {
       
       setFormData({
         customer_name: '', customer_lastname: '', customer_phone_country_code: '+46', customer_email: '', customer_phone: '',
+        preferred_contact_channel: '',
         device_type: '', device_model: '', issue_description: '', additional_notes: '',
       });
       setLanguage('sv');
@@ -208,7 +231,7 @@ export default function PublicRegistrationPage() {
                   <Input id="customer_lastname" name="customer_lastname" value={formData.customer_lastname} onChange={handleInputChange} placeholder={t.customerInfo.lastNamePlaceholder} />
                 </div>
                 <div>
-                  <Label htmlFor="customer_phone">{t.customerInfo.phone} *</Label>
+                  <Label htmlFor="customer_phone">{t.customerInfo.phone}</Label>
                   <div className="flex gap-2">
                     <Select
                       value={formData.customer_phone_country_code}
@@ -227,8 +250,34 @@ export default function PublicRegistrationPage() {
                   </div>
                 </div>
                 <div>
-                  <Label htmlFor="customer_email">{t.customerInfo.email} *</Label>
-                  <Input id="customer_email" name="customer_email" type="email" value={formData.customer_email} onChange={handleInputChange} placeholder={t.customerInfo.emailPlaceholder} required />
+                  <Label htmlFor="customer_email">{t.customerInfo.email}</Label>
+                  <Input id="customer_email" name="customer_email" type="email" value={formData.customer_email} onChange={handleInputChange} placeholder={t.customerInfo.emailPlaceholder} />
+                </div>
+                <div className="sm:col-span-2">
+                  <p className="text-xs text-gray-500 mb-2">
+                    Minst ett av telefonnummer eller e-post krävs.
+                  </p>
+                  {formData.customer_phone?.trim() && formData.customer_email?.trim() ? (
+                    <div>
+                      <Label>Primär kontaktväg *</Label>
+                      <Select
+                        value={formData.preferred_contact_channel}
+                        onValueChange={(value) => handleSelectChange('preferred_contact_channel', value)}
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="Välj primär kontaktväg..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="sms">SMS</SelectItem>
+                          <SelectItem value="email">E-post</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-500">
+                      Primär kontakt väljs automatiskt när endast en kontaktväg anges.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

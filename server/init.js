@@ -29,6 +29,19 @@ export async function initDb() {
   await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS last_staff_contact_at TIMESTAMPTZ`);
   await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS last_staff_contact_by TEXT`);
   await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS last_staff_contact_channel TEXT`);
+  await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS preferred_contact_channel TEXT`);
+  await query(`ALTER TABLE service_tickets ALTER COLUMN customer_phone DROP NOT NULL`);
+  await query(
+    `UPDATE service_tickets
+     SET preferred_contact_channel = CASE
+       WHEN customer_phone IS NOT NULL AND customer_phone <> '' AND (customer_email IS NULL OR customer_email = '') THEN 'sms'
+       WHEN customer_email IS NOT NULL AND customer_email <> '' AND (customer_phone IS NULL OR customer_phone = '') THEN 'email'
+       WHEN customer_email IS NOT NULL AND customer_email <> '' THEN COALESCE(preferred_contact_channel, 'email')
+       WHEN customer_phone IS NOT NULL AND customer_phone <> '' THEN COALESCE(preferred_contact_channel, 'sms')
+       ELSE preferred_contact_channel
+     END
+     WHERE preferred_contact_channel IS NULL OR preferred_contact_channel = ''`
+  );
   await query(
     `DO $$
      BEGIN

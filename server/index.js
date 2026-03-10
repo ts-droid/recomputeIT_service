@@ -148,6 +148,25 @@ const toSmsNumber = (phone) => {
 };
 
 const getLanguage = (ticket) => ticket?.disclaimer_language || 'sv';
+const normalizePreferredChannel = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'sms') return 'sms';
+  if (normalized === 'email' || normalized === 'e-post') return 'email';
+  return '';
+};
+
+const resolvePreferredContactChannel = (ticketOrPayload = {}) => {
+  const hasPhone = Boolean(ticketOrPayload.customer_phone?.toString().trim());
+  const hasEmail = Boolean(ticketOrPayload.customer_email?.toString().trim());
+  const preferred = normalizePreferredChannel(ticketOrPayload.preferred_contact_channel);
+
+  if (hasPhone && hasEmail) {
+    return preferred || 'email';
+  }
+  if (hasPhone) return 'sms';
+  if (hasEmail) return 'email';
+  return '';
+};
 
 const parseApprovalDecision = (rawMessage = '') => {
   const message = String(rawMessage || '').trim();
@@ -949,6 +968,7 @@ app.post('/api/tickets', requireAuth, async (req, res) => {
       customer_name,
       customer_email,
       customer_phone,
+      preferred_contact_channel,
       device_type,
       device_model,
       issue_description,
@@ -959,10 +979,26 @@ app.post('/api/tickets', requireAuth, async (req, res) => {
     } = req.body || {};
 
     const missingFields = [];
+    const cleanedEmail = customer_email?.toString().trim() || '';
+    const cleanedPhone = customer_phone?.toString().trim() || '';
     if (!customer_name?.toString().trim()) missingFields.push('customer_name');
-    if (!customer_phone?.toString().trim()) missingFields.push('customer_phone');
+    if (!cleanedPhone && !cleanedEmail) missingFields.push('customer_phone_or_email');
     if (!device_type?.toString().trim()) missingFields.push('device_type');
     if (!issue_description?.toString().trim()) missingFields.push('issue_description');
+
+    const resolvedPreferredChannel = (() => {
+      const hasPhone = Boolean(cleanedPhone);
+      const hasEmail = Boolean(cleanedEmail);
+      const normalizedPreferred = normalizePreferredChannel(preferred_contact_channel);
+      if (hasPhone && hasEmail) return normalizedPreferred;
+      if (hasPhone) return 'sms';
+      if (hasEmail) return 'email';
+      return '';
+    })();
+
+    if (cleanedPhone && cleanedEmail && !resolvedPreferredChannel) {
+      missingFields.push('preferred_contact_channel');
+    }
 
     if (missingFields.length > 0) {
       console.warn('POST /api/tickets validation failed:', {
@@ -977,7 +1013,7 @@ app.post('/api/tickets', requireAuth, async (req, res) => {
       });
     }
 
-    const normalizedPhone = normalizePhone(customer_phone);
+    const normalizedPhone = normalizePhone(cleanedPhone);
     const { rows } = await query(
       `
         INSERT INTO service_tickets (
@@ -985,6 +1021,7 @@ app.post('/api/tickets', requireAuth, async (req, res) => {
           customer_email,
           customer_phone,
           customer_phone_normalized,
+          preferred_contact_channel,
           device_type,
           device_model,
           issue_description,
@@ -993,14 +1030,15 @@ app.post('/api/tickets', requireAuth, async (req, res) => {
           status,
           user_id
         )
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
         RETURNING *
       `,
       [
         customer_name,
-        customer_email || null,
-        customer_phone,
+        cleanedEmail || null,
+        cleanedPhone || null,
         normalizedPhone || null,
+        resolvedPreferredChannel || null,
         device_type,
         device_model || null,
         issue_description,
@@ -1039,6 +1077,9 @@ app.patch('/api/tickets/:id', requireAuth, requireRole('service'), async (req, r
       'diagnosis',
       'is_hidden',
       'disclaimer_language',
+      'preferred_contact_channel',
+      'customer_email',
+      'customer_phone',
       'additional_notes',
       'device_model',
       'completed_at',
@@ -1046,11 +1087,6 @@ app.patch('/api/tickets/:id', requireAuth, requireRole('service'), async (req, r
       'picked_up_at',
       'closed_at',
     ]);
-
-    const fields = Object.keys(updates).filter((key) => allowedFields.has(key));
-    if (fields.length === 0) {
-      return res.status(400).json({ error: 'Inga giltiga fält att uppdatera.' });
-    }
 
     if (updates.status) {
       if (updates.status === 'Färdig') {
@@ -1070,6 +1106,27 @@ app.patch('/api/tickets/:id', requireAuth, requireRole('service'), async (req, r
           updates.closed_at = new Date().toISOString();
         }
       }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, 'customer_phone')) {
+      updates.customer_phone = updates.customer_phone?.toString().trim() || null;
+      updates.customer_phone_normalized = normalizePhone(updates.customer_phone || '');
+      if (!allowedFields.has('customer_phone_normalized')) {
+        allowedFields.add('customer_phone_normalized');
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, 'customer_email')) {
+      updates.customer_email = updates.customer_email?.toString().trim() || null;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, 'preferred_contact_channel')) {
+      updates.preferred_contact_channel = normalizePreferredChannel(updates.preferred_contact_channel) || null;
+    }
+
+    const fields = Object.keys(updates).filter((key) => allowedFields.has(key));
+    if (fields.length === 0) {
+      return res.status(400).json({ error: 'Inga giltiga fält att uppdatera.' });
     }
 
     const setFragments = fields.map((field, idx) => `${field} = $${idx + 1}`);
@@ -1476,7 +1533,10 @@ app.post('/api/notify/cost-proposal', requireAuth, requireRole('service'), async
         return res.status(400).json({ error: 'Varken telefonnummer eller e-post finns registrerat.' });
       }
 
-      if (ticket.customer_phone) {
+      const preferred = resolvePreferredContactChannel(ticket);
+      const trySmsFirst = preferred === 'sms' || (preferred !== 'email' && ticket.customer_phone && !ticket.customer_email);
+
+      if (trySmsFirst && ticket.customer_phone) {
         try {
           const smsResponse = await sendSms({
             to: ticket.customer_phone,
@@ -1489,12 +1549,12 @@ app.post('/api/notify/cost-proposal', requireAuth, requireRole('service'), async
           );
           delivery.sms_sent = true;
         } catch (error) {
-          console.error('SMS send failed (cost-proposal/auto):', error);
+          console.error('SMS send failed (cost-proposal/auto preferred):', error);
           delivery.warnings.push('SMS kunde inte skickas.');
         }
       }
 
-      if (ticket.customer_email) {
+      if (!delivery.sms_sent && ticket.customer_email) {
         try {
           await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody });
           await query(
@@ -1504,8 +1564,26 @@ app.post('/api/notify/cost-proposal', requireAuth, requireRole('service'), async
           );
           delivery.email_sent = true;
         } catch (error) {
-          console.error('Email send failed (cost-proposal/auto):', error);
+          console.error('Email send failed (cost-proposal/auto preferred):', error);
           delivery.warnings.push('E-post kunde inte skickas.');
+        }
+      }
+
+      if (!trySmsFirst && !delivery.email_sent && ticket.customer_phone) {
+        try {
+          const smsResponse = await sendSms({
+            to: ticket.customer_phone,
+            message,
+          });
+          await query(
+            `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, body, provider, provider_id)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [ticket.id, 'sms', 'outbound', sender, ticket.customer_phone, message, '46elks', smsResponse?.id || null]
+          );
+          delivery.sms_sent = true;
+        } catch (error) {
+          console.error('SMS fallback failed (cost-proposal/auto preferred):', error);
+          delivery.warnings.push('SMS kunde inte skickas.');
         }
       }
 
@@ -1621,7 +1699,10 @@ app.post('/api/notify/repair-ready', requireAuth, requireRole('service'), async 
         return res.status(400).json({ error: 'Varken telefonnummer eller e-post finns registrerat.' });
       }
 
-      if (ticket.customer_phone) {
+      const preferred = resolvePreferredContactChannel(ticket);
+      const trySmsFirst = preferred === 'sms' || (preferred !== 'email' && ticket.customer_phone && !ticket.customer_email);
+
+      if (trySmsFirst && ticket.customer_phone) {
         try {
           const smsResponse = await sendSms({
             to: ticket.customer_phone,
@@ -1634,12 +1715,12 @@ app.post('/api/notify/repair-ready', requireAuth, requireRole('service'), async 
           );
           delivery.sms_sent = true;
         } catch (error) {
-          console.error('SMS send failed (repair-ready/auto):', error);
+          console.error('SMS send failed (repair-ready/auto preferred):', error);
           delivery.warnings.push('SMS kunde inte skickas.');
         }
       }
 
-      if (ticket.customer_email) {
+      if (!delivery.sms_sent && ticket.customer_email) {
         try {
           await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody });
           await query(
@@ -1649,8 +1730,26 @@ app.post('/api/notify/repair-ready', requireAuth, requireRole('service'), async 
           );
           delivery.email_sent = true;
         } catch (error) {
-          console.error('Email send failed (repair-ready/auto):', error);
+          console.error('Email send failed (repair-ready/auto preferred):', error);
           delivery.warnings.push('E-post kunde inte skickas.');
+        }
+      }
+
+      if (!trySmsFirst && !delivery.email_sent && ticket.customer_phone) {
+        try {
+          const smsResponse = await sendSms({
+            to: ticket.customer_phone,
+            message,
+          });
+          await query(
+            `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, body, provider, provider_id)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [ticket.id, 'sms', 'outbound', sender, ticket.customer_phone, message, '46elks', smsResponse?.id || null]
+          );
+          delivery.sms_sent = true;
+        } catch (error) {
+          console.error('SMS fallback failed (repair-ready/auto preferred):', error);
+          delivery.warnings.push('SMS kunde inte skickas.');
         }
       }
 

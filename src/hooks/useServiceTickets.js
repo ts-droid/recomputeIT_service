@@ -85,10 +85,13 @@ export const useServiceTickets = () => {
 
   const addTicket = useCallback(async (ticketData) => {
     try {
+      const normalizedEmail = (ticketData.email || '').trim();
+      const normalizedPhone = toE164(ticketData.phone, ticketData.phoneCountryCode || '+46');
       const newTicketPayload = {
         customer_name: `${ticketData.firstName} ${ticketData.lastName}`,
-        customer_email: ticketData.email,
-        customer_phone: toE164(ticketData.phone, ticketData.phoneCountryCode || '+46'),
+        customer_email: normalizedEmail || null,
+        customer_phone: normalizedPhone || null,
+        preferred_contact_channel: ticketData.preferredContactChannel || null,
         device_type: ticketData.deviceType,
         device_model: ticketData.deviceModel,
         issue_description: ticketData.problemDescription,

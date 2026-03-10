@@ -338,7 +338,15 @@ export const TicketRow = ({ ticket, onUpdate }) => {
                   <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-2">
                     <h3 className="font-semibold text-gray-800 flex items-center gap-2"><User size={16} />Kundinformation</h3>
                     <p className="text-sm text-gray-600 flex items-center gap-2"><Mail size={14} /> {ticket.customer_email || 'Ej angiven'}</p>
-                    <p className="text-sm text-gray-600 flex items-center gap-2"><Phone size={14} /> {ticket.customer_phone}</p>
+                    <p className="text-sm text-gray-600 flex items-center gap-2"><Phone size={14} /> {ticket.customer_phone || 'Ej angiven'}</p>
+                    <p className="text-sm text-gray-600">
+                      <strong className="font-medium">Primär kontakt:</strong>{' '}
+                      {ticket.preferred_contact_channel === 'sms'
+                        ? 'SMS'
+                        : ticket.preferred_contact_channel === 'email'
+                          ? 'E-post'
+                          : 'Automatisk'}
+                    </p>
                     <p className="text-sm text-gray-600 flex items-center gap-2"><Languages size={14} /> Godkännande: {languageMap[ticket.disclaimer_language] || ticket.disclaimer_language}</p>
                     <p className="text-sm text-gray-600 flex items-center gap-2"><Calendar size={14} /> Skapad: {new Date(ticket.created_at).toLocaleString('sv-SE')}</p>
                   </div>
