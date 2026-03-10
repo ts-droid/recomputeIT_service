@@ -301,6 +301,50 @@ const htmlToPlainText = (html = '') =>
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 
+const collectTextCandidates = (value, keyPath = '', out = []) => {
+  if (value === null || value === undefined) return out;
+  if (typeof value === 'string') {
+    const key = keyPath.toLowerCase();
+    if (
+      key.includes('text') ||
+      key.includes('plain') ||
+      key.includes('body') ||
+      key.includes('snippet') ||
+      key.includes('content') ||
+      key.includes('value')
+    ) {
+      const trimmed = value.trim();
+      if (trimmed) out.push(trimmed);
+    }
+    return out;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item, idx) => collectTextCandidates(item, `${keyPath}[${idx}]`, out));
+    return out;
+  }
+  if (typeof value === 'object') {
+    Object.entries(value).forEach(([key, child]) => {
+      const nextPath = keyPath ? `${keyPath}.${key}` : key;
+      collectTextCandidates(child, nextPath, out);
+    });
+  }
+  return out;
+};
+
+const pickBestTextCandidate = (candidates = []) => {
+  if (!candidates.length) return '';
+  const cleaned = candidates
+    .map((item) => item.replace(/\r/g, '').trim())
+    .filter(Boolean)
+    .filter((item) => item.length >= 2)
+    .filter((item) => !/^[\w.+-]+@[\w.-]+\.[a-z]{2,}$/i.test(item))
+    .filter((item) => !/^re:\s*/i.test(item));
+  if (!cleaned.length) return '';
+  const sorted = [...new Set(cleaned)].sort((a, b) => b.length - a.length);
+  const richest = sorted.find((item) => /\s/.test(item) || item.length > 8);
+  return richest || sorted[0];
+};
+
 const extractInboundText = (payload) => {
   if (!payload) return '';
   const directText = firstString(payload, [
@@ -332,7 +376,10 @@ const extractInboundText = (payload) => {
     'email.html',
     'email.html_body',
   ]);
-  return html ? htmlToPlainText(html) : '';
+  if (html) return htmlToPlainText(html);
+
+  const candidate = pickBestTextCandidate(collectTextCandidates(payload));
+  return candidate || '';
 };
 
 const extractReplySnippetFromRawWebhook = (raw = '') => {
@@ -822,27 +869,7 @@ const mailer = SMTP_HOST
   : null;
 
 const sendEmail = async ({ to, subject, body }) => {
-  let smtpError = null;
-
-  if (mailer) {
-    try {
-      const result = await mailer.sendMail({
-        from: SMTP_FROM || SMTP_USER,
-        replyTo: EMAIL_REPLY_TO || undefined,
-        to,
-        subject,
-        text: body,
-      });
-
-      return result;
-    } catch (error) {
-      const smtpTarget = `${SMTP_HOST}:${SMTP_PORT}`;
-      const reason = error?.message || 'Unknown SMTP error';
-      const code = error?.code ? ` (${error.code})` : '';
-      smtpError = `SMTP ${smtpTarget} failed${code}: ${reason}`;
-    }
-  }
-
+  let resendError = null;
   if (RESEND_API_KEY && RESEND_FROM) {
     try {
       const response = await fetch('https://api.resend.com/emails', {
@@ -867,14 +894,36 @@ const sendEmail = async ({ to, subject, body }) => {
 
       return;
     } catch (error) {
-      const reason = error?.message || 'Unknown Resend error';
-      if (smtpError) {
-        throw new Error(`${smtpError} | Resend API failed: ${reason}`);
-      }
-      throw new Error(`Resend API failed: ${reason}`);
+      resendError = `Resend API failed: ${error?.message || 'Unknown Resend error'}`;
     }
   }
 
+  let smtpError = null;
+  if (mailer) {
+    try {
+      const result = await mailer.sendMail({
+        from: SMTP_FROM || SMTP_USER,
+        replyTo: EMAIL_REPLY_TO || undefined,
+        to,
+        subject,
+        text: body,
+      });
+
+      return result;
+    } catch (error) {
+      const smtpTarget = `${SMTP_HOST}:${SMTP_PORT}`;
+      const reason = error?.message || 'Unknown SMTP error';
+      const code = error?.code ? ` (${error.code})` : '';
+      smtpError = `SMTP ${smtpTarget} failed${code}: ${reason}`;
+    }
+  }
+
+  if (resendError && smtpError) {
+    throw new Error(`${resendError} | ${smtpError}`);
+  }
+  if (resendError) {
+    throw new Error(resendError);
+  }
   if (smtpError) {
     throw new Error(smtpError);
   }
@@ -1711,6 +1760,13 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
             await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
           }
         }
+      }
+      if (!inbound.text) {
+        console.warn('Inbound email has empty extracted body after fetch attempts', {
+          emailId: inbound.emailId,
+          subject: inbound.subject || null,
+          from: inbound.from || null,
+        });
       }
     }
 
