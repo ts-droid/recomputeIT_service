@@ -144,9 +144,22 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
         throw new Error('Send failed');
       }
 
+      const result = await response.json().catch(() => ({}));
+      const warningText = Array.isArray(result?.warnings) ? result.warnings.join(' ') : '';
+      const sentSms = Boolean(result?.sms_sent);
+      const sentEmail = Boolean(result?.email_sent);
+
+      let description = channel === 'sms' ? "SMS skickat till kunden." : "E-post skickad till kunden.";
+      if (channel === 'sms' && sentSms && sentEmail) {
+        description = 'SMS och e-post skickades till kunden.';
+      }
+      if (warningText) {
+        description = `${description} ${warningText}`.trim();
+      }
+
       toast({
         title: "Skickat!",
-        description: channel === 'sms' ? "SMS skickat till kunden." : "E-post skickad till kunden.",
+        description,
       });
       onOpenChange(false);
     } catch (error) {

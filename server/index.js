@@ -649,6 +649,12 @@ app.post('/api/notify/cost-proposal', requireAuth, requireRole('service'), async
       textTemplates.costProposal[language]?.(ticket, amount) ||
       textTemplates.costProposal.sv(ticket, amount);
     const message = await translateIfNeeded(messageBase, language);
+    const template =
+      emailTemplates.costProposal[language]?.(ticket, amount) ||
+      emailTemplates.costProposal.sv(ticket, amount);
+    const translatedBody = await translateIfNeeded(template.body, language);
+    const translatedSubject = await translateIfNeeded(template.subject, language);
+    const delivery = { sms_sent: false, email_sent: false, warnings: [] };
 
     if (channel === 'sms') {
       if (!ticket.customer_phone) {
@@ -663,21 +669,33 @@ app.post('/api/notify/cost-proposal', requireAuth, requireRole('service'), async
          VALUES ($1,$2,$3,$4,$5,$6,$7)`,
         [ticket.id, 'sms', 'outbound', ticket.customer_phone, message, '46elks', smsResponse?.id || null]
       );
+      delivery.sms_sent = true;
+
+      if (ticket.customer_email) {
+        try {
+          await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody });
+          await query(
+            `INSERT INTO message_logs (ticket_id, channel, direction, to_number, subject, body, provider)
+             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+            [ticket.id, 'email', 'outbound', ticket.customer_email, translatedSubject, translatedBody, 'smtp']
+          );
+          delivery.email_sent = true;
+        } catch (error) {
+          console.error('Auto email after sms (cost-proposal) failed:', error);
+          delivery.warnings.push('SMS skickades, men e-post kunde inte skickas.');
+        }
+      }
     } else {
       if (!ticket.customer_email) {
         return res.status(400).json({ error: 'E-post saknas.' });
       }
-      const template =
-        emailTemplates.costProposal[language]?.(ticket, amount) ||
-        emailTemplates.costProposal.sv(ticket, amount);
-      const translatedBody = await translateIfNeeded(template.body, language);
-      const translatedSubject = await translateIfNeeded(template.subject, language);
       await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody });
       await query(
         `INSERT INTO message_logs (ticket_id, channel, direction, to_number, subject, body, provider)
          VALUES ($1,$2,$3,$4,$5,$6,$7)`,
         [ticket.id, 'email', 'outbound', ticket.customer_email, translatedSubject, translatedBody, 'smtp']
       );
+      delivery.email_sent = true;
     }
 
     await query(
@@ -685,7 +703,7 @@ app.post('/api/notify/cost-proposal', requireAuth, requireRole('service'), async
       ['Väntar på kund', ticket.id]
     );
 
-    res.json({ ok: true });
+    res.json({ ok: true, ...delivery });
   } catch (error) {
     console.error('POST /api/notify/cost-proposal error:', error);
     res.status(500).json({ error: 'Kunde inte skicka.' });
@@ -703,6 +721,11 @@ app.post('/api/notify/repair-ready', requireAuth, requireRole('service'), async 
     const messageBase =
       textTemplates.repairReady[language]?.(ticket) || textTemplates.repairReady.sv(ticket);
     const message = await translateIfNeeded(messageBase, language);
+    const template =
+      emailTemplates.repairReady[language]?.(ticket) || emailTemplates.repairReady.sv(ticket);
+    const translatedBody = await translateIfNeeded(template.body, language);
+    const translatedSubject = await translateIfNeeded(template.subject, language);
+    const delivery = { sms_sent: false, email_sent: false, warnings: [] };
 
     if (channel === 'sms') {
       if (!ticket.customer_phone) {
@@ -717,20 +740,33 @@ app.post('/api/notify/repair-ready', requireAuth, requireRole('service'), async 
          VALUES ($1,$2,$3,$4,$5,$6,$7)`,
         [ticket.id, 'sms', 'outbound', ticket.customer_phone, message, '46elks', smsResponse?.id || null]
       );
+      delivery.sms_sent = true;
+
+      if (ticket.customer_email) {
+        try {
+          await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody });
+          await query(
+            `INSERT INTO message_logs (ticket_id, channel, direction, to_number, subject, body, provider)
+             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+            [ticket.id, 'email', 'outbound', ticket.customer_email, translatedSubject, translatedBody, 'smtp']
+          );
+          delivery.email_sent = true;
+        } catch (error) {
+          console.error('Auto email after sms (repair-ready) failed:', error);
+          delivery.warnings.push('SMS skickades, men e-post kunde inte skickas.');
+        }
+      }
     } else {
       if (!ticket.customer_email) {
         return res.status(400).json({ error: 'E-post saknas.' });
       }
-      const template =
-        emailTemplates.repairReady[language]?.(ticket) || emailTemplates.repairReady.sv(ticket);
-      const translatedBody = await translateIfNeeded(template.body, language);
-      const translatedSubject = await translateIfNeeded(template.subject, language);
       await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody });
       await query(
         `INSERT INTO message_logs (ticket_id, channel, direction, to_number, subject, body, provider)
          VALUES ($1,$2,$3,$4,$5,$6,$7)`,
         [ticket.id, 'email', 'outbound', ticket.customer_email, translatedSubject, translatedBody, 'smtp']
       );
+      delivery.email_sent = true;
     }
 
     await query(
@@ -738,7 +774,7 @@ app.post('/api/notify/repair-ready', requireAuth, requireRole('service'), async 
       ['Färdig', ticket.id]
     );
 
-    res.json({ ok: true });
+    res.json({ ok: true, ...delivery });
   } catch (error) {
     console.error('POST /api/notify/repair-ready error:', error);
     res.status(500).json({ error: 'Kunde inte skicka.' });
