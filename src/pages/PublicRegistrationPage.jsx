@@ -117,9 +117,9 @@ export default function PublicRegistrationPage() {
       toast({
         title: t.toast.incompleteTitle,
         description: !hasAnyContact
-          ? 'Ange minst telefonnummer eller e-postadress.'
+          ? (t.toast.missingContactDescription || 'Ange minst telefonnummer eller e-postadress.')
           : !hasPreferredWhenBoth
-            ? 'Välj primär kontaktväg (SMS eller e-post).'
+            ? (t.toast.missingPrimaryContactDescription || 'Välj primär kontaktväg (SMS eller e-post).')
             : t.toast.incompleteDescription,
         variant: 'destructive',
       });
@@ -255,27 +255,27 @@ export default function PublicRegistrationPage() {
                 </div>
                 <div className="sm:col-span-2">
                   <p className="text-xs text-gray-500 mb-2">
-                    Minst ett av telefonnummer eller e-post krävs.
+                    {t.customerInfo.contactRequirementNote}
                   </p>
                   {formData.customer_phone?.trim() && formData.customer_email?.trim() ? (
                     <div>
-                      <Label>Primär kontaktväg *</Label>
+                      <Label>{t.customerInfo.primaryContactLabel} *</Label>
                       <Select
                         value={formData.preferred_contact_channel}
                         onValueChange={(value) => handleSelectChange('preferred_contact_channel', value)}
                       >
                         <SelectTrigger className="mt-1">
-                          <SelectValue placeholder="Välj primär kontaktväg..." />
+                          <SelectValue placeholder={t.customerInfo.primaryContactPlaceholder} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="sms">SMS</SelectItem>
-                          <SelectItem value="email">E-post</SelectItem>
+                          <SelectItem value="sms">{t.customerInfo.contactOptionSms}</SelectItem>
+                          <SelectItem value="email">{t.customerInfo.contactOptionEmail}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                   ) : (
                     <p className="text-xs text-gray-500">
-                      Primär kontakt väljs automatiskt när endast en kontaktväg anges.
+                      {t.customerInfo.primaryContactAutoNote}
                     </p>
                   )}
                 </div>
