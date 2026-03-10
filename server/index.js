@@ -7,6 +7,7 @@ import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import nodemailer from 'nodemailer';
 import { Resend } from 'resend';
+import { Webhook as SvixWebhook } from 'svix';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -63,6 +64,7 @@ const EMAIL_REPLY_TO = process.env.EMAIL_REPLY_TO || '';
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const RESEND_FROM = process.env.RESEND_FROM || '';
 const resendClient = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
+const resendWebhookVerifier = RESEND_WEBHOOK_SECRET ? new SvixWebhook(RESEND_WEBHOOK_SECRET) : null;
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || '';
 const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
@@ -1150,16 +1152,23 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
       Boolean(req.headers['svix-timestamp']) &&
       Boolean(req.headers['svix-signature']);
 
-    if (hasSvixHeaders && RESEND_WEBHOOK_SECRET && resendClient) {
-      parsedPayload = resendClient.webhooks.verify({
-        payload: req.rawBody || JSON.stringify(req.body || {}),
-        headers: {
-          id: req.headers['svix-id'],
-          timestamp: req.headers['svix-timestamp'],
-          signature: req.headers['svix-signature'],
-        },
-        webhookSecret: RESEND_WEBHOOK_SECRET,
-      });
+    if (hasSvixHeaders && RESEND_WEBHOOK_SECRET) {
+      if (!resendWebhookVerifier) {
+        return res.status(500).json({ error: 'Resend webhook verifier not initialized' });
+      }
+      try {
+        parsedPayload = resendWebhookVerifier.verify(
+          req.rawBody || JSON.stringify(req.body || {}),
+          {
+            'svix-id': req.headers['svix-id'],
+            'svix-timestamp': req.headers['svix-timestamp'],
+            'svix-signature': req.headers['svix-signature'],
+          }
+        );
+      } catch (error) {
+        console.error('Invalid Resend webhook signature:', error);
+        return res.status(400).json({ error: 'Invalid webhook signature' });
+      }
       if (parsedPayload?.type !== 'email.received') {
         return res.json({ ok: true, ignored: true });
       }
