@@ -363,9 +363,11 @@ const decisionAckTemplates = {
   },
 };
 
-const translateIfNeeded = async (text, language) => {
+const translateIfNeeded = async (text, language, options = {}) => {
+  const { allowEnglish = false } = options;
   if (!DEEPSEEK_API_KEY) return text;
-  if (!language || language === 'sv' || language === 'en') return text;
+  if (!language || language === 'sv') return text;
+  if (language === 'en' && !allowEnglish) return text;
 
   try {
     const response = await fetch('https://api.deepseek.com/chat/completions', {
@@ -406,6 +408,21 @@ const translateIfNeeded = async (text, language) => {
     console.error('DeepSeek translation failed:', error);
     return text;
   }
+};
+
+const localizeTicketFreeText = async (ticket, language) => {
+  if (!ticket || !language || language === 'sv') return ticket;
+
+  const [diagnosisLocalized, workDoneLocalized] = await Promise.all([
+    translateIfNeeded(ticket.diagnosis || '', language, { allowEnglish: true }),
+    translateIfNeeded(ticket.work_done_summary || '', language, { allowEnglish: true }),
+  ]);
+
+  return {
+    ...ticket,
+    diagnosis: diagnosisLocalized || ticket.diagnosis,
+    work_done_summary: workDoneLocalized || ticket.work_done_summary,
+  };
 };
 
 const sendSms = async ({ to, message }) => {
@@ -863,14 +880,15 @@ app.post('/api/notify/cost-proposal', requireAuth, requireRole('service'), async
     if (requestedLanguage && requestedLanguage !== ticket.disclaimer_language) {
       await query(`UPDATE service_tickets SET disclaimer_language = $1 WHERE id = $2`, [requestedLanguage, ticket.id]);
     }
+    const localizedTicket = await localizeTicketFreeText(ticket, language);
     const amount = ticket.final_cost || '—';
     const messageBase =
-      textTemplates.costProposal[language]?.(ticket, amount) ||
-      textTemplates.costProposal.sv(ticket, amount);
+      textTemplates.costProposal[language]?.(localizedTicket, amount) ||
+      textTemplates.costProposal.sv(localizedTicket, amount);
     const message = await translateIfNeeded(messageBase, language);
     const template =
-      emailTemplates.costProposal[language]?.(ticket, amount) ||
-      emailTemplates.costProposal.sv(ticket, amount);
+      emailTemplates.costProposal[language]?.(localizedTicket, amount) ||
+      emailTemplates.costProposal.sv(localizedTicket, amount);
     const translatedBody = await translateIfNeeded(template.body, language);
     const translatedSubject = await translateIfNeeded(template.subject, language);
     const delivery = { sms_sent: false, email_sent: false, warnings: [] };
@@ -1010,11 +1028,12 @@ app.post('/api/notify/repair-ready', requireAuth, requireRole('service'), async 
     if (requestedLanguage && requestedLanguage !== ticket.disclaimer_language) {
       await query(`UPDATE service_tickets SET disclaimer_language = $1 WHERE id = $2`, [requestedLanguage, ticket.id]);
     }
+    const localizedTicket = await localizeTicketFreeText(ticket, language);
     const messageBase =
-      textTemplates.repairReady[language]?.(ticket) || textTemplates.repairReady.sv(ticket);
+      textTemplates.repairReady[language]?.(localizedTicket) || textTemplates.repairReady.sv(localizedTicket);
     const message = await translateIfNeeded(messageBase, language);
     const template =
-      emailTemplates.repairReady[language]?.(ticket) || emailTemplates.repairReady.sv(ticket);
+      emailTemplates.repairReady[language]?.(localizedTicket) || emailTemplates.repairReady.sv(localizedTicket);
     const translatedBody = await translateIfNeeded(template.body, language);
     const translatedSubject = await translateIfNeeded(template.subject, language);
     const delivery = { sms_sent: false, email_sent: false, warnings: [] };
