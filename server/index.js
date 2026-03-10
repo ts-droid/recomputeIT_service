@@ -230,37 +230,49 @@ const mailer = SMTP_HOST
 
 const sendEmail = async ({ to, subject, body }) => {
   if (mailer) {
-    const result = await mailer.sendMail({
-      from: SMTP_FROM || SMTP_USER,
-      to,
-      subject,
-      text: body,
-    });
+    try {
+      const result = await mailer.sendMail({
+        from: SMTP_FROM || SMTP_USER,
+        to,
+        subject,
+        text: body,
+      });
 
-    return result;
+      return result;
+    } catch (error) {
+      const smtpTarget = `${SMTP_HOST}:${SMTP_PORT}`;
+      const reason = error?.message || 'Unknown SMTP error';
+      const code = error?.code ? ` (${error.code})` : '';
+      throw new Error(`SMTP ${smtpTarget} failed${code}: ${reason}`);
+    }
   }
 
   if (RESEND_API_KEY && RESEND_FROM) {
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: RESEND_FROM,
-        to: Array.isArray(to) ? to : [to],
-        subject,
-        text: body,
-      }),
-    });
+    try {
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: RESEND_FROM,
+          to: Array.isArray(to) ? to : [to],
+          subject,
+          text: body,
+        }),
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Resend error: ${errorText}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Resend HTTP ${response.status}: ${errorText}`);
+      }
+
+      return;
+    } catch (error) {
+      const reason = error?.message || 'Unknown Resend error';
+      throw new Error(`Resend API failed: ${reason}`);
     }
-
-    return;
   }
 
   throw new Error('Email is not configured');
