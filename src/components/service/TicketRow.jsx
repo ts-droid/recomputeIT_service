@@ -332,50 +332,28 @@ export const TicketRow = ({ ticket, onUpdate }) => {
             className="overflow-hidden"
           >
             <div className="bg-gray-50/70 p-6 border-t border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-8">
-              
-              <div className="space-y-4">
-                <h3 className="font-semibold text-gray-800 flex items-center gap-2"><User size={16} />Kundinformation</h3>
-                <p className="text-sm text-gray-600 flex items-center gap-2"><Mail size={14} /> {ticket.customer_email || 'Ej angiven'}</p>
-                <p className="text-sm text-gray-600 flex items-center gap-2"><Phone size={14} /> {ticket.customer_phone}</p>
-                <p className="text-sm text-gray-600 flex items-center gap-2"><Languages size={14} /> Godkännande: {languageMap[ticket.disclaimer_language] || ticket.disclaimer_language}</p>
-                <p className="text-sm text-gray-600 flex items-center gap-2"><Calendar size={14} /> Skapad: {new Date(ticket.created_at).toLocaleString('sv-SE')}</p>
-                <div className="space-y-2">
-                  <div className={`rounded-lg border p-3 text-sm ${customerDecision ? customerDecision.className : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
-                    <p className="font-semibold flex items-center gap-2">
-                      <MessageSquare size={14} />
-                      {customerDecision ? customerDecision.label : 'Kund svar: Saknas'}
-                    </p>
-                    {ticket.last_customer_response_text && (
-                      <p className="mt-1 break-words whitespace-pre-wrap">
-                        {latestInboundMessage?.body || latestInboundMessage?.subject || ticket.last_customer_response_text}
-                      </p>
-                    )}
-                    {ticket.last_customer_response_at && (
-                      <p className="mt-1 text-xs opacity-80">
-                        {new Date(ticket.last_customer_response_at).toLocaleString('sv-SE')} via {channelLabel(ticket.last_customer_response_channel)}
-                      </p>
-                    )}
+
+              <div className="md:col-span-2 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-2">
+                    <h3 className="font-semibold text-gray-800 flex items-center gap-2"><User size={16} />Kundinformation</h3>
+                    <p className="text-sm text-gray-600 flex items-center gap-2"><Mail size={14} /> {ticket.customer_email || 'Ej angiven'}</p>
+                    <p className="text-sm text-gray-600 flex items-center gap-2"><Phone size={14} /> {ticket.customer_phone}</p>
+                    <p className="text-sm text-gray-600 flex items-center gap-2"><Languages size={14} /> Godkännande: {languageMap[ticket.disclaimer_language] || ticket.disclaimer_language}</p>
+                    <p className="text-sm text-gray-600 flex items-center gap-2"><Calendar size={14} /> Skapad: {new Date(ticket.created_at).toLocaleString('sv-SE')}</p>
                   </div>
-                  <div className="rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-700">
-                    <p className="font-semibold flex items-center gap-2">
-                      <Send size={14} />
-                      Senast kontaktad av personal
-                    </p>
-                    {ticket.last_staff_contact_by ? (
-                      <>
-                        <p className="mt-1">{ticket.last_staff_contact_by}</p>
-                        <p className="text-xs text-gray-500">
-                          {ticket.last_staff_contact_at ? new Date(ticket.last_staff_contact_at).toLocaleString('sv-SE') : 'Tid saknas'} via {channelLabel(ticket.last_staff_contact_channel)}
-                        </p>
-                      </>
-                    ) : (
-                      <p className="mt-1 text-gray-500">Ingen kontakt loggad ännu.</p>
-                    )}
+                  <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-2">
+                    <h3 className="font-semibold text-gray-800 flex items-center gap-2"><Smartphone size={16} />Enhetsinformation</h3>
+                    <p className="text-sm text-gray-700 font-medium">{ticket.device_model || 'Modell ej angiven'}</p>
+                    <p className="text-sm text-gray-600"><strong className="font-medium">Felbeskrivning:</strong> {ticket.issue_description}</p>
+                    {ticket.additional_notes && <p className="text-sm text-gray-600"><strong className="font-medium">Anteckningar från kund:</strong> {ticket.additional_notes}</p>}
+                    {currentDiagnosis && <p className="text-sm text-gray-600 mt-2 p-2 bg-yellow-50 border-l-4 border-yellow-300"><strong className="font-medium">Senaste diagnos:</strong> {currentDiagnosis}</p>}
                   </div>
                 </div>
+
                 <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-3">
                   <p className="font-semibold text-sm text-gray-800">Kommunikation</p>
-                  <div className="max-h-80 overflow-y-auto space-y-2 pr-1 rounded-lg border border-gray-200 bg-[#f5efe5] p-3">
+                  <div className="max-h-[460px] overflow-y-auto space-y-2 pr-1 rounded-lg border border-gray-200 bg-[#f5efe5] p-3">
                     {loadingMessages ? (
                       <p className="text-xs text-gray-500">Laddar...</p>
                     ) : messages.length === 0 ? (
@@ -435,14 +413,6 @@ export const TicketRow = ({ ticket, onUpdate }) => {
                     </div>
                   )}
                 </div>
-              </div>
-
-              <div className="space-y-4">
-                <h3 className="font-semibold text-gray-800 flex items-center gap-2"><Smartphone size={16} />Enhetsinformation</h3>
-                <p className="text-sm text-gray-700 font-medium">{ticket.device_model || 'Modell ej angiven'}</p>
-                <p className="text-sm text-gray-600"><strong className="font-medium">Felbeskrivning:</strong> {ticket.issue_description}</p>
-                {ticket.additional_notes && <p className="text-sm text-gray-600"><strong className="font-medium">Anteckningar från kund:</strong> {ticket.additional_notes}</p>}
-                 {currentDiagnosis && <p className="text-sm text-gray-600 mt-2 p-2 bg-yellow-50 border-l-4 border-yellow-300"><strong className="font-medium">Senaste diagnos:</strong> {currentDiagnosis}</p>}
               </div>
 
               <div className="space-y-4">
