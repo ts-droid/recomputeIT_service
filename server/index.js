@@ -980,7 +980,10 @@ app.post('/api/preview-notification', requireAuth, requireRole('service'), async
       final_cost: final_cost ?? ticket.final_cost,
     };
 
-    const localizedPreviewTicket = await localizeTicketFreeText(previewTicket, language, { strict: true });
+    const strictPreviewTranslation = templateType === 'reparationFardig';
+    const localizedPreviewTicket = await localizeTicketFreeText(previewTicket, language, {
+      strict: strictPreviewTranslation,
+    });
 
     const preview = await buildNotificationPreview({
       templateType,

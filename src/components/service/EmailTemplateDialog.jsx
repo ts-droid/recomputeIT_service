@@ -47,6 +47,7 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
   const { toast } = useToast();
 
   const isCostProposal = templateType === 'kostnadsforslag';
+  const requireStrictTranslatedPreview = templateType === 'reparationFardig';
   const placeholderText = translationPlaceholders[currentLang] || translationPlaceholders.sv;
 
   useEffect(() => {
@@ -121,7 +122,8 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
     return () => clearTimeout(timer);
   }, [open, ticket, templateType, token, currentLang, diagnosis, costProposal]);
 
-  const canFallbackToLocal = currentLang === 'sv' || !previewError;
+  const canFallbackToLocal =
+    currentLang === 'sv' || !requireStrictTranslatedPreview || !previewError;
   const effectiveSubject = canFallbackToLocal
     ? (previewContent.subject || emailContent?.subject || '')
     : '';
@@ -324,7 +326,7 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
         )}
 
         <div className="bg-gray-100 p-4 rounded-md space-y-4 max-h-80 overflow-y-auto border border-gray-200">
-          {previewError && currentLang !== 'sv' && (
+          {previewError && currentLang !== 'sv' && requireStrictTranslatedPreview && (
             <p className="text-sm text-red-600">
               Förhandsvisning kunde inte översättas: {previewError}
             </p>
