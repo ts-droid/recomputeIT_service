@@ -43,6 +43,7 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
   const [isSending, setIsSending] = useState(false);
   const [previewContent, setPreviewContent] = useState({ subject: '', body: '' });
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState('');
   const { toast } = useToast();
 
   const isCostProposal = templateType === 'kostnadsforslag';
@@ -97,7 +98,8 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
         });
 
         if (!response.ok) {
-          throw new Error('preview failed');
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData?.details || errorData?.error || 'preview failed');
         }
 
         const data = await response.json();
@@ -105,9 +107,11 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
           subject: data?.subject || '',
           body: data?.body || '',
         });
+        setPreviewError('');
       } catch (error) {
         console.error('Preview generation error:', error);
         setPreviewContent({ subject: '', body: '' });
+        setPreviewError(error?.message || 'Kunde inte översätta förhandsvisning.');
       } finally {
         setIsPreviewLoading(false);
       }
@@ -117,8 +121,13 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
     return () => clearTimeout(timer);
   }, [open, ticket, templateType, token, currentLang, diagnosis, costProposal]);
 
-  const effectiveSubject = previewContent.subject || emailContent?.subject || '';
-  const effectiveBody = previewContent.body || emailContent?.body || '';
+  const canFallbackToLocal = currentLang === 'sv' || !previewError;
+  const effectiveSubject = canFallbackToLocal
+    ? (previewContent.subject || emailContent?.subject || '')
+    : '';
+  const effectiveBody = canFallbackToLocal
+    ? (previewContent.body || emailContent?.body || '')
+    : '';
 
   const handleCopy = () => {
     navigator.clipboard.writeText(effectiveBody);
@@ -315,6 +324,11 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
         )}
 
         <div className="bg-gray-100 p-4 rounded-md space-y-4 max-h-80 overflow-y-auto border border-gray-200">
+          {previewError && currentLang !== 'sv' && (
+            <p className="text-sm text-red-600">
+              Förhandsvisning kunde inte översättas: {previewError}
+            </p>
+          )}
           <div>
             <Label className="font-semibold text-gray-800">E-post Ämne</Label>
             <p className="text-sm bg-white p-2 rounded-md mt-1">{effectiveSubject}</p>

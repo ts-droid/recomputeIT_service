@@ -408,8 +408,13 @@ const decisionAckTemplates = {
 };
 
 const translateIfNeeded = async (text, language, options = {}) => {
-  const { allowEnglish = false } = options;
-  if (!DEEPSEEK_API_KEY) return text;
+  const { allowEnglish = false, strict = false } = options;
+  if (!DEEPSEEK_API_KEY) {
+    if (strict && language && language !== 'sv') {
+      throw new Error('Translation unavailable: DEEPSEEK_API_KEY is missing');
+    }
+    return text;
+  }
   if (!language || language === 'sv') return text;
   if (language === 'en' && !allowEnglish) return text;
 
@@ -450,16 +455,20 @@ const translateIfNeeded = async (text, language, options = {}) => {
     return cleaned || text;
   } catch (error) {
     console.error('DeepSeek translation failed:', error);
+    if (strict) {
+      throw error;
+    }
     return text;
   }
 };
 
-const localizeTicketFreeText = async (ticket, language) => {
+const localizeTicketFreeText = async (ticket, language, options = {}) => {
   if (!ticket || !language || language === 'sv') return ticket;
+  const { strict = false } = options;
 
   const [diagnosisLocalized, workDoneLocalized] = await Promise.all([
-    translateIfNeeded(ticket.diagnosis || '', language, { allowEnglish: true }),
-    translateIfNeeded(ticket.work_done_summary || '', language, { allowEnglish: true }),
+    translateIfNeeded(ticket.diagnosis || '', language, { allowEnglish: true, strict }),
+    translateIfNeeded(ticket.work_done_summary || '', language, { allowEnglish: true, strict }),
   ]);
 
   return {
@@ -470,7 +479,7 @@ const localizeTicketFreeText = async (ticket, language) => {
 };
 
 const buildNotificationPreview = async ({ templateType, ticket, language }) => {
-  const localizedTicket = await localizeTicketFreeText(ticket, language);
+  const localizedTicket = ticket;
 
   if (templateType === 'kostnadsforslag') {
     const amount = ticket.final_cost || '—';
@@ -971,16 +980,21 @@ app.post('/api/preview-notification', requireAuth, requireRole('service'), async
       final_cost: final_cost ?? ticket.final_cost,
     };
 
+    const localizedPreviewTicket = await localizeTicketFreeText(previewTicket, language, { strict: true });
+
     const preview = await buildNotificationPreview({
       templateType,
-      ticket: previewTicket,
+      ticket: localizedPreviewTicket,
       language,
     });
 
     return res.json({ ok: true, language, ...preview });
   } catch (error) {
     console.error('POST /api/preview-notification error:', error);
-    return res.status(500).json({ error: 'Kunde inte generera förhandsvisning.' });
+    return res.status(500).json({
+      error: 'Kunde inte generera förhandsvisning.',
+      details: error?.message || 'Okänt fel',
+    });
   }
 });
 
