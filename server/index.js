@@ -616,16 +616,15 @@ const decisionAckTemplates = {
   },
 };
 
-const translateIfNeeded = async (text, language, options = {}) => {
-  const { allowEnglish = false, strict = false } = options;
+const translateText = async (text, targetLanguage, options = {}) => {
+  const { strict = false } = options;
+  if (!text || !targetLanguage) return text;
   if (!DEEPSEEK_API_KEY) {
-    if (strict && language && language !== 'sv') {
+    if (strict) {
       throw new Error('Translation unavailable: DEEPSEEK_API_KEY is missing');
     }
     return text;
   }
-  if (!language || language === 'sv') return text;
-  if (language === 'en' && !allowEnglish) return text;
 
   try {
     const response = await fetch('https://api.deepseek.com/chat/completions', {
@@ -640,11 +639,11 @@ const translateIfNeeded = async (text, language, options = {}) => {
           {
             role: 'system',
             content:
-              'Translate the text into the requested language. Keep numbers, names, and case numbers unchanged. Return only the translated text.',
+              'Translate the text into the requested target language. Keep numbers, names, and case numbers unchanged. Return only the translated text.',
           },
           {
             role: 'user',
-            content: `Language: ${language}\nText: ${text}`,
+            content: `Target language: ${targetLanguage}\nText: ${text}`,
           },
         ],
         temperature: 0.2,
@@ -660,7 +659,10 @@ const translateIfNeeded = async (text, language, options = {}) => {
     if (!translated) return text;
 
     // Guard against model wrappers like "Language: sv Text: ..."
-    const cleaned = translated.replace(/^Language:\s*[a-z-]+\s*Text:\s*/i, '').trim();
+    const cleaned = translated
+      .replace(/^Language:\s*[a-z-]+\s*Text:\s*/i, '')
+      .replace(/^Target language:\s*[a-z-]+\s*Text:\s*/i, '')
+      .trim();
     return cleaned || text;
   } catch (error) {
     console.error('DeepSeek translation failed:', error);
@@ -669,6 +671,64 @@ const translateIfNeeded = async (text, language, options = {}) => {
     }
     return text;
   }
+};
+
+const translateIfNeeded = async (text, language, options = {}) => {
+  const { allowEnglish = false, strict = false } = options;
+  if (!language || language === 'sv') return text;
+  if (language === 'en' && !allowEnglish) return text;
+  return translateText(text, language, { strict });
+};
+
+const normalizeComparableText = (value = '') =>
+  String(value)
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const isLikelySwedish = (text = '') => {
+  const sample = normalizeComparableText(text);
+  if (!sample) return false;
+  if (/[åäö]/i.test(text)) return true;
+
+  const swedishWords = [
+    'och',
+    'att',
+    'det',
+    'är',
+    'jag',
+    'inte',
+    'med',
+    'för',
+    'på',
+    'du',
+    'vi',
+    'till',
+    'en',
+    'ett',
+    'den',
+    'som',
+  ];
+
+  let hits = 0;
+  for (const word of swedishWords) {
+    if (new RegExp(`\\b${word}\\b`, 'i').test(sample)) hits += 1;
+    if (hits >= 2) return true;
+  }
+  return false;
+};
+
+const maybeAppendSwedishTranslation = async (_ticket, text) => {
+  if (!text) return text;
+  if (isLikelySwedish(text)) return text;
+
+  const translated = await translateText(text, 'sv');
+  if (!translated) return text;
+  if (normalizeComparableText(translated) === normalizeComparableText(text)) {
+    return text;
+  }
+  return `${text}\n\n(Svenska: ${translated})`;
 };
 
 const localizeTicketFreeText = async (ticket, language, options = {}) => {
@@ -1028,8 +1088,14 @@ app.post('/api/tickets/:id/messages', requireAuth, requireRole('service'), async
       return res.status(400).json({ error: 'Kunden saknar e-postadress.' });
     }
 
-    const resolvedSubject = subject?.toString().trim() || `Re: Ärende #${ticket.ticket_number}`;
-    const resolvedBody = body.toString().trim();
+    const baseSubject = subject?.toString().trim() || `Re: Ärende #${ticket.ticket_number}`;
+    const baseBody = body.toString().trim();
+    const language = getLanguage(ticket);
+
+    const [resolvedSubject, resolvedBody] = await Promise.all([
+      translateIfNeeded(baseSubject, language, { allowEnglish: true }),
+      translateIfNeeded(baseBody, language, { allowEnglish: true }),
+    ]);
 
     await sendEmail({
       to: ticket.customer_email,
@@ -1666,11 +1732,24 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
       ticket = byEmail.rows[0] || null;
     }
 
+    const inboundTextWithSwedish =
+      inbound.text && typeof inbound.text === 'string'
+        ? await maybeAppendSwedishTranslation(ticket, inbound.text)
+        : inbound.text;
+
     if (!ticket) {
       await query(
         `INSERT INTO message_logs (channel, direction, from_number, to_number, subject, body, provider)
          VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        ['email', 'inbound', inbound.from, inbound.to || null, inbound.subject || null, inbound.text || null, inbound.provider]
+        [
+          'email',
+          'inbound',
+          inbound.from,
+          inbound.to || null,
+          inbound.subject || null,
+          inboundTextWithSwedish || null,
+          inbound.provider,
+        ]
       );
       return res.json({ ok: true, matched: false });
     }
@@ -1678,7 +1757,16 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
     await query(
       `INSERT INTO message_logs (ticket_id, channel, direction, from_number, to_number, subject, body, provider)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [ticket.id, 'email', 'inbound', inbound.from, inbound.to || null, inbound.subject || null, inbound.text || null, inbound.provider]
+      [
+        ticket.id,
+        'email',
+        'inbound',
+        inbound.from,
+        inbound.to || null,
+        inbound.subject || null,
+        inboundTextWithSwedish || null,
+        inbound.provider,
+      ]
     );
 
     let decision = parseApprovalDecision(`${inbound.subject}\n${inbound.text}`);
@@ -1781,11 +1869,13 @@ app.post('/api/webhooks/46elks', async (req, res) => {
     );
 
     const ticket = rows[0];
+    const messageWithSwedish = await maybeAppendSwedishTranslation(ticket, message);
+
     if (!ticket) {
       await query(
         `INSERT INTO message_logs (channel, direction, from_number, body, provider)
          VALUES ($1,$2,$3,$4,$5)`,
-        ['sms', 'inbound', from, message, '46elks']
+        ['sms', 'inbound', from, messageWithSwedish, '46elks']
       );
       return res.json({ ok: true });
     }
@@ -1793,7 +1883,7 @@ app.post('/api/webhooks/46elks', async (req, res) => {
     await query(
       `INSERT INTO message_logs (ticket_id, channel, direction, from_number, body, provider)
        VALUES ($1,$2,$3,$4,$5,$6)`,
-      [ticket.id, 'sms', 'inbound', from, message, '46elks']
+      [ticket.id, 'sms', 'inbound', from, messageWithSwedish, '46elks']
     );
 
     const decision = parseApprovalDecision(message);
