@@ -283,11 +283,23 @@ const sendDecisionAcknowledgement = async ({ ticket, decision, channel, smsTo, e
 
 const loadResendReceivedEmail = async (emailId) => {
   if (!resendClient || !emailId) return null;
-  const result = await resendClient.emails.receiving.get(emailId);
-  if (result?.error) {
-    throw new Error(`Resend receiving get failed: ${result.error.message || 'unknown error'}`);
+  if (resendClient?.emails?.receiving?.get) {
+    const receivingResult = await resendClient.emails.receiving.get(emailId);
+    if (receivingResult?.error) {
+      throw new Error(`Resend receiving get failed: ${receivingResult.error.message || 'unknown error'}`);
+    }
+    return receivingResult?.data || null;
   }
-  return result?.data || null;
+
+  if (resendClient?.emails?.get) {
+    const getResult = await resendClient.emails.get(emailId);
+    if (getResult?.error) {
+      throw new Error(`Resend emails.get failed: ${getResult.error.message || 'unknown error'}`);
+    }
+    return getResult?.data || null;
+  }
+
+  throw new Error('No supported Resend email retrieval method found in current SDK version');
 };
 
 const textTemplates = {
