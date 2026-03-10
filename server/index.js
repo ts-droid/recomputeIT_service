@@ -193,25 +193,38 @@ const REPLY_HINT_BY_LANGUAGE = {
 };
 
 const EMAIL_REPLY_MARKERS = Object.values(REPLY_MARKER_BY_LANGUAGE).map((line) => line.toLowerCase());
+const REPLY_TOKEN_REGEX = /RECOMPUTE[_-]?REPLY[_-]?START[:\s_-]*([a-z0-9-]{6,64})/i;
+const QUOTE_HEADER_REGEX = /(^|\n)\s*(on .+wrote:|den .+skrev:|från:|from:|skickat:|sent:|till:|to:|am .+schrieb|el .+escribi[oó]|le .+a écrit)/i;
 
 const getReplyMarkerLine = (language = 'sv') => REPLY_MARKER_BY_LANGUAGE[language] || REPLY_MARKER_BY_LANGUAGE.sv;
 const getReplyHintLine = (language = 'sv') => REPLY_HINT_BY_LANGUAGE[language] || REPLY_HINT_BY_LANGUAGE.sv;
+const getReplyTokenLine = (replyToken = '') =>
+  replyToken ? `--- RECOMPUTE_REPLY_START:${replyToken} ---` : '--- RECOMPUTE_REPLY_START ---';
+const generateReplyToken = () => crypto.randomBytes(6).toString('hex');
 
-const appendReplyGuidance = (body = '', language = 'sv') => {
+const appendReplyGuidance = (body = '', language = 'sv', replyToken = '') => {
   const marker = getReplyMarkerLine(language);
   const hint = getReplyHintLine(language);
+  const tokenLine = getReplyTokenLine(replyToken);
   const normalizedBody = String(body || '').trim();
   const bodyWithoutAnyMarker = normalizedBody
     .split('\n')
     .filter((line) => !EMAIL_REPLY_MARKERS.includes(line.trim().toLowerCase()))
     .join('\n')
     .trim();
-  return `${bodyWithoutAnyMarker}\n\n${marker}\n${hint}`.trim();
+  return `${bodyWithoutAnyMarker}\n\n${marker}\n${hint}\n${tokenLine}`.trim();
 };
 
-const extractTopReplyText = (rawMessage = '') => {
+const extractTopReply = (rawMessage = '') => {
   const message = String(rawMessage || '').replace(/\r/g, '').trim();
-  if (!message) return '';
+  if (!message) return { text: '', method: 'empty', confidence: 'low', replyToken: null };
+
+  const tokenMatch = message.match(REPLY_TOKEN_REGEX);
+  if (tokenMatch?.index !== undefined) {
+    const text = message.slice(0, tokenMatch.index).trim() || message;
+    return { text, method: 'reply_token', confidence: 'high', replyToken: tokenMatch[1] || null };
+  }
+
   const lower = message.toLowerCase();
   let cutoff = lower.length;
 
@@ -219,8 +232,34 @@ const extractTopReplyText = (rawMessage = '') => {
     const idx = lower.indexOf(marker);
     if (idx !== -1 && idx < cutoff) cutoff = idx;
   }
+  if (cutoff < lower.length) {
+    const text = message.slice(0, cutoff).trim() || message;
+    return { text, method: 'marker_line', confidence: 'high', replyToken: null };
+  }
 
-  return message.slice(0, cutoff).trim() || message;
+  const quoteHeaderMatch = message.match(QUOTE_HEADER_REGEX);
+  if (quoteHeaderMatch?.index !== undefined) {
+    const text = message.slice(0, quoteHeaderMatch.index).trim() || message;
+    return { text, method: 'quote_header', confidence: 'medium', replyToken: null };
+  }
+
+  const lines = message.split('\n');
+  const cleanedLines = [];
+  for (const line of lines) {
+    if (line.trim().startsWith('>')) break;
+    if (/^\s*sent from my/i.test(line)) break;
+    cleanedLines.push(line);
+  }
+  const cleaned = cleanedLines.join('\n').trim();
+  if (cleaned && cleaned !== message) {
+    return { text: cleaned, method: 'quoted_lines', confidence: 'medium', replyToken: null };
+  }
+
+  return { text: message, method: 'fallback_full', confidence: 'low', replyToken: null };
+};
+
+const extractTopReplyText = (rawMessage = '') => {
+  return extractTopReply(rawMessage).text;
 };
 
 const parseApprovalDecision = (rawMessage = '') => {
@@ -517,6 +556,24 @@ const parseInboundEmailPayload = (body) => {
     'gmail.subject',
   ]);
   const text = extractInboundText(body);
+  const messageId = firstString(body, [
+    'data.message_id',
+    'message_id',
+    'data.headers.message-id',
+    'headers.message-id',
+  ]);
+  const inReplyTo = firstString(body, [
+    'data.in_reply_to',
+    'in_reply_to',
+    'data.headers.in-reply-to',
+    'headers.in-reply-to',
+  ]);
+  const referencesHeader = firstString(body, [
+    'data.references',
+    'references',
+    'data.headers.references',
+    'headers.references',
+  ]);
   const to = firstString(body, [
     'data.to',
     'to',
@@ -531,6 +588,9 @@ const parseInboundEmailPayload = (body) => {
     subject,
     text,
     emailId: firstString(body, ['data.email_id', 'email_id']),
+    messageId,
+    inReplyTo,
+    referencesHeader,
   };
 };
 
@@ -619,16 +679,17 @@ const sendDecisionClarification = async ({ ticket, channel, smsTo, emailTo }) =>
 
   if (channel === 'email' && emailTo) {
     const language = getLanguage(ticket);
-    const bodyWithMarker = appendReplyGuidance(template.body, language);
+    const replyToken = generateReplyToken();
+    const bodyWithMarker = appendReplyGuidance(template.body, language, replyToken);
     await sendEmail({
       to: emailTo,
       subject: template.subject,
       body: bodyWithMarker,
     });
     await query(
-      `INSERT INTO message_logs (ticket_id, channel, direction, to_number, subject, body, provider)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [ticket.id, 'email', 'outbound', emailTo, template.subject, bodyWithMarker, 'smtp']
+      `INSERT INTO message_logs (ticket_id, channel, direction, to_number, subject, body, reply_token, provider)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [ticket.id, 'email', 'outbound', emailTo, template.subject, bodyWithMarker, replyToken, 'smtp']
     );
   }
 };
@@ -952,7 +1013,7 @@ const localizeTicketFreeText = async (ticket, language, options = {}) => {
   };
 };
 
-const buildNotificationPreview = async ({ templateType, ticket, language, settings }) => {
+const buildNotificationPreview = async ({ templateType, ticket, language, settings, replyToken = '' }) => {
   const localizedTicket = ticket;
   const activeSettings = mergeMessageSettings(settings || {});
   const emailFooter = await getLocalizedSetting(activeSettings.email_footer_by_lang, language);
@@ -971,7 +1032,7 @@ const buildNotificationPreview = async ({ templateType, ticket, language, settin
     let body = await translateIfNeeded(template.body, language);
     body = appendUniqueBlock(body, await getLocalizedSetting(activeSettings.cost_prompt_by_lang, language));
     body = appendUniqueBlock(body, emailFooter);
-    body = appendReplyGuidance(body, language);
+    body = appendReplyGuidance(body, language, replyToken);
     sms = appendUniqueBlock(sms, smsFooter);
     return { subject, body, sms };
   }
@@ -987,7 +1048,7 @@ const buildNotificationPreview = async ({ templateType, ticket, language, settin
   let body = await translateIfNeeded(template.body, language);
   body = appendUniqueBlock(body, await getLocalizedSetting(activeSettings.ready_prompt_by_lang, language));
   body = appendUniqueBlock(body, emailFooter);
-  body = appendReplyGuidance(body, language);
+  body = appendReplyGuidance(body, language, replyToken);
   sms = appendUniqueBlock(sms, smsFooter);
   return { subject, body, sms };
 };
@@ -1324,7 +1385,7 @@ app.get('/api/tickets/:id/messages', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { rows } = await query(
-      `SELECT id, ticket_id, channel, direction, sender_user, to_number, from_number, subject, body, provider, provider_id, created_at
+      `SELECT id, ticket_id, channel, direction, sender_user, to_number, from_number, subject, body, raw_body, parse_method, parse_confidence, message_id, in_reply_to, references_header, reply_token, provider, provider_id, created_at
        FROM message_logs
        WHERE ticket_id = $1
        ORDER BY created_at DESC
@@ -1372,7 +1433,8 @@ app.post('/api/tickets/:id/messages', requireAuth, requireRole('service'), async
       translateIfNeeded(baseBody, language, { allowEnglish: true }),
     ]);
     const resolvedSubject = translatedSubject?.toString().trim() || baseSubject;
-    const resolvedBody = appendReplyGuidance(translatedBody?.toString().trim() || baseBody, language);
+    const replyToken = generateReplyToken();
+    const resolvedBody = appendReplyGuidance(translatedBody?.toString().trim() || baseBody, language, replyToken);
     if (!resolvedBody) {
       return res.status(400).json({ error: 'Meddelandetext saknas efter översättning.' });
     }
@@ -1384,10 +1446,10 @@ app.post('/api/tickets/:id/messages', requireAuth, requireRole('service'), async
     });
 
     const inserted = await query(
-      `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, subject, body, provider)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, subject, body, reply_token, provider)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
        RETURNING id, ticket_id, channel, direction, sender_user, to_number, from_number, subject, body, provider, provider_id, created_at`,
-      [ticket.id, 'email', 'outbound', sender, ticket.customer_email, resolvedSubject, resolvedBody, 'smtp']
+      [ticket.id, 'email', 'outbound', sender, ticket.customer_email, resolvedSubject, resolvedBody, replyToken, 'smtp']
     );
 
     await query(
@@ -1666,6 +1728,7 @@ app.post('/api/notify/cost-proposal', requireAuth, requireRole('service'), async
     if (!ticket) return res.status(404).json({ error: 'Ärende hittades inte.' });
 
     const language = requestedLanguage || getLanguage(ticket);
+    const replyToken = generateReplyToken();
     if (requestedLanguage && requestedLanguage !== ticket.disclaimer_language) {
       await query(`UPDATE service_tickets SET disclaimer_language = $1 WHERE id = $2`, [requestedLanguage, ticket.id]);
     }
@@ -1676,6 +1739,7 @@ app.post('/api/notify/cost-proposal', requireAuth, requireRole('service'), async
       ticket: localizedTicket,
       language,
       settings: messageSettings,
+      replyToken,
     });
     const message = preview.sms;
     const translatedBody = preview.body;
@@ -1707,9 +1771,9 @@ app.post('/api/notify/cost-proposal', requireAuth, requireRole('service'), async
         try {
           await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody });
           await query(
-            `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, subject, body, provider)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-            [ticket.id, 'email', 'outbound', sender, ticket.customer_email, translatedSubject, translatedBody, 'smtp']
+            `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, subject, body, reply_token, provider)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+            [ticket.id, 'email', 'outbound', sender, ticket.customer_email, translatedSubject, translatedBody, replyToken, 'smtp']
           );
           delivery.email_sent = true;
         } catch (error) {
@@ -1754,9 +1818,9 @@ app.post('/api/notify/cost-proposal', requireAuth, requireRole('service'), async
         try {
           await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody });
           await query(
-            `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, subject, body, provider)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-            [ticket.id, 'email', 'outbound', sender, ticket.customer_email, translatedSubject, translatedBody, 'smtp']
+            `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, subject, body, reply_token, provider)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+            [ticket.id, 'email', 'outbound', sender, ticket.customer_email, translatedSubject, translatedBody, replyToken, 'smtp']
           );
           delivery.email_sent = true;
         } catch (error) {
@@ -1795,9 +1859,9 @@ app.post('/api/notify/cost-proposal', requireAuth, requireRole('service'), async
       }
       await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody });
       await query(
-        `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, subject, body, provider)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-        [ticket.id, 'email', 'outbound', sender, ticket.customer_email, translatedSubject, translatedBody, 'smtp']
+        `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, subject, body, reply_token, provider)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [ticket.id, 'email', 'outbound', sender, ticket.customer_email, translatedSubject, translatedBody, replyToken, 'smtp']
       );
       delivery.email_sent = true;
     }
@@ -1835,6 +1899,7 @@ app.post('/api/notify/repair-ready', requireAuth, requireRole('service'), async 
     if (!ticket) return res.status(404).json({ error: 'Ärende hittades inte.' });
 
     const language = requestedLanguage || getLanguage(ticket);
+    const replyToken = generateReplyToken();
     if (requestedLanguage && requestedLanguage !== ticket.disclaimer_language) {
       await query(`UPDATE service_tickets SET disclaimer_language = $1 WHERE id = $2`, [requestedLanguage, ticket.id]);
     }
@@ -1845,6 +1910,7 @@ app.post('/api/notify/repair-ready', requireAuth, requireRole('service'), async 
       ticket: localizedTicket,
       language,
       settings: messageSettings,
+      replyToken,
     });
     const message = preview.sms;
     const translatedBody = preview.body;
@@ -1876,9 +1942,9 @@ app.post('/api/notify/repair-ready', requireAuth, requireRole('service'), async 
         try {
           await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody });
           await query(
-            `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, subject, body, provider)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-            [ticket.id, 'email', 'outbound', sender, ticket.customer_email, translatedSubject, translatedBody, 'smtp']
+            `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, subject, body, reply_token, provider)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+            [ticket.id, 'email', 'outbound', sender, ticket.customer_email, translatedSubject, translatedBody, replyToken, 'smtp']
           );
           delivery.email_sent = true;
         } catch (error) {
@@ -1923,9 +1989,9 @@ app.post('/api/notify/repair-ready', requireAuth, requireRole('service'), async 
         try {
           await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody });
           await query(
-            `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, subject, body, provider)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-            [ticket.id, 'email', 'outbound', sender, ticket.customer_email, translatedSubject, translatedBody, 'smtp']
+            `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, subject, body, reply_token, provider)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+            [ticket.id, 'email', 'outbound', sender, ticket.customer_email, translatedSubject, translatedBody, replyToken, 'smtp']
           );
           delivery.email_sent = true;
         } catch (error) {
@@ -1964,9 +2030,9 @@ app.post('/api/notify/repair-ready', requireAuth, requireRole('service'), async 
       }
       await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody });
       await query(
-        `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, subject, body, provider)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-        [ticket.id, 'email', 'outbound', sender, ticket.customer_email, translatedSubject, translatedBody, 'smtp']
+        `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, subject, body, reply_token, provider)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [ticket.id, 'email', 'outbound', sender, ticket.customer_email, translatedSubject, translatedBody, replyToken, 'smtp']
       );
       delivery.email_sent = true;
     }
@@ -2094,22 +2160,32 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
       ticket = byEmail.rows[0] || null;
     }
 
+    const rawInboundText = inbound.text && typeof inbound.text === 'string' ? inbound.text : '';
+    const extractedReply = extractTopReply(rawInboundText || inbound.subject || '');
+    const inboundReplyText = extractedReply.text || (inbound.subject || '');
     const inboundTextWithSwedish =
-      inbound.text && typeof inbound.text === 'string'
-        ? await maybeAppendSwedishTranslation(ticket, inbound.text)
-        : inbound.text;
+      rawInboundText
+        ? await maybeAppendSwedishTranslation(ticket, rawInboundText)
+        : rawInboundText;
 
     if (!ticket) {
       await query(
-        `INSERT INTO message_logs (channel, direction, from_number, to_number, subject, body, provider)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        `INSERT INTO message_logs (channel, direction, from_number, to_number, subject, body, raw_body, parse_method, parse_confidence, message_id, in_reply_to, references_header, reply_token, provider)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
         [
           'email',
           'inbound',
           inbound.from,
           inbound.to || null,
           inbound.subject || null,
-          inboundTextWithSwedish || null,
+          inboundTextWithSwedish || inboundReplyText || null,
+          rawInboundText || null,
+          extractedReply.method,
+          extractedReply.confidence,
+          inbound.messageId || null,
+          inbound.inReplyTo || null,
+          inbound.referencesHeader || null,
+          extractedReply.replyToken || null,
           inbound.provider,
         ]
       );
@@ -2117,8 +2193,8 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
     }
 
     await query(
-      `INSERT INTO message_logs (ticket_id, channel, direction, from_number, to_number, subject, body, provider)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      `INSERT INTO message_logs (ticket_id, channel, direction, from_number, to_number, subject, body, raw_body, parse_method, parse_confidence, message_id, in_reply_to, references_header, reply_token, provider)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
       [
         ticket.id,
         'email',
@@ -2126,17 +2202,22 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
         inbound.from,
         inbound.to || null,
         inbound.subject || null,
-        inboundTextWithSwedish || null,
+        inboundTextWithSwedish || inboundReplyText || null,
+        rawInboundText || null,
+        extractedReply.method,
+        extractedReply.confidence,
+        inbound.messageId || null,
+        inbound.inReplyTo || null,
+        inbound.referencesHeader || null,
+        extractedReply.replyToken || null,
         inbound.provider,
       ]
     );
 
-    const inboundReplyText = extractTopReplyText(inbound.text || inbound.subject || '') || (inbound.subject || '');
-    let decision = parseApprovalDecision(`${inbound.subject}\n${inboundReplyText}`);
+    let decision = parseApprovalDecision(inboundReplyText);
     if (!decision && !inbound.text && req.rawBody) {
       const fallbackSnippet = extractReplySnippetFromRawWebhook(req.rawBody);
       if (fallbackSnippet) {
-        inbound.text = fallbackSnippet;
         decision = parseApprovalDecision(extractTopReplyText(fallbackSnippet));
       }
     }

@@ -619,6 +619,17 @@ export const TicketRow = ({ ticket, onUpdate }) => {
                 <p className="font-semibold text-gray-800">Text</p>
                 <p className="mt-1 whitespace-pre-wrap break-words">{selectedMessage.body || '(Ingen brödtext mottagen i webhook)'}</p>
               </div>
+              {selectedMessage.parse_confidence && (
+                <p className="text-xs text-gray-500">
+                  Parser: {selectedMessage.parse_method || 'okänd'} · Säkerhet: {selectedMessage.parse_confidence}
+                </p>
+              )}
+              {selectedMessage.raw_body && selectedMessage.raw_body !== selectedMessage.body && (
+                <div>
+                  <p className="font-semibold text-gray-800">Originalmail (rå text)</p>
+                  <p className="mt-1 whitespace-pre-wrap break-words text-gray-600">{selectedMessage.raw_body}</p>
+                </div>
+              )}
             </div>
           )}
         </DialogContent>

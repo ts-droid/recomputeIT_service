@@ -73,6 +73,13 @@ export async function initDb() {
     )`
   );
   await query(`ALTER TABLE message_logs ADD COLUMN IF NOT EXISTS sender_user TEXT`);
+  await query(`ALTER TABLE message_logs ADD COLUMN IF NOT EXISTS raw_body TEXT`);
+  await query(`ALTER TABLE message_logs ADD COLUMN IF NOT EXISTS parse_method TEXT`);
+  await query(`ALTER TABLE message_logs ADD COLUMN IF NOT EXISTS parse_confidence TEXT`);
+  await query(`ALTER TABLE message_logs ADD COLUMN IF NOT EXISTS message_id TEXT`);
+  await query(`ALTER TABLE message_logs ADD COLUMN IF NOT EXISTS in_reply_to TEXT`);
+  await query(`ALTER TABLE message_logs ADD COLUMN IF NOT EXISTS references_header TEXT`);
+  await query(`ALTER TABLE message_logs ADD COLUMN IF NOT EXISTS reply_token TEXT`);
   await query(
     `CREATE TABLE IF NOT EXISTS app_settings (
       key TEXT PRIMARY KEY,

@@ -59,6 +59,13 @@ CREATE TABLE IF NOT EXISTS message_logs (
   from_number TEXT,
   subject TEXT,
   body TEXT,
+  raw_body TEXT,
+  parse_method TEXT,
+  parse_confidence TEXT,
+  message_id TEXT,
+  in_reply_to TEXT,
+  references_header TEXT,
+  reply_token TEXT,
   provider TEXT,
   provider_id TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
