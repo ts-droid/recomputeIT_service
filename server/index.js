@@ -6,6 +6,7 @@ import { query } from './db.js';
 import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,7 +15,14 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 const DIST_DIR = path.resolve(__dirname, '..', 'dist');
 
-app.use(express.json({ limit: '1mb' }));
+app.use(
+  express.json({
+    limit: '1mb',
+    verify: (req, _res, buf) => {
+      req.rawBody = buf.toString('utf8');
+    },
+  })
+);
 app.use(express.urlencoded({ extended: false }));
 app.use(express.text({ type: 'text/plain', limit: '1mb' }));
 app.use((req, _res, next) => {
@@ -24,6 +32,9 @@ app.use((req, _res, next) => {
     } catch {
       // Keep original body and let route-level validation handle it.
     }
+  }
+  if (!req.rawBody && typeof req.body === 'string') {
+    req.rawBody = req.body;
   }
   next();
 });
@@ -40,6 +51,7 @@ const ELKS_WEBHOOK_SECRET = process.env.ELKS_WEBHOOK_SECRET || '';
 const SMS_DEFAULT_COUNTRY_CODE = process.env.SMS_DEFAULT_COUNTRY_CODE || '+46';
 const EMAIL_WEBHOOK_SECRET = process.env.EMAIL_WEBHOOK_SECRET || '';
 const EMAIL_INBOUND_PROVIDER = (process.env.EMAIL_INBOUND_PROVIDER || 'auto').toLowerCase();
+const RESEND_WEBHOOK_SECRET = process.env.RESEND_WEBHOOK_SECRET || '';
 
 const SMTP_HOST = process.env.SMTP_HOST || '';
 const SMTP_PORT = Number(process.env.SMTP_PORT || 587);
@@ -50,6 +62,7 @@ const EMAIL_REPLY_TO = process.env.EMAIL_REPLY_TO || '';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const RESEND_FROM = process.env.RESEND_FROM || '';
+const resendClient = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || '';
 const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
@@ -267,20 +280,12 @@ const sendDecisionAcknowledgement = async ({ ticket, decision, channel, smsTo, e
 };
 
 const loadResendReceivedEmail = async (emailId) => {
-  if (!RESEND_API_KEY || !emailId) return null;
-  const response = await fetch(`https://api.resend.com/emails/receiving/${emailId}`, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-  });
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Resend receiving get failed (${response.status}): ${errorText}`);
+  if (!resendClient || !emailId) return null;
+  const result = await resendClient.emails.receiving.get(emailId);
+  if (result?.error) {
+    throw new Error(`Resend receiving get failed: ${result.error.message || 'unknown error'}`);
   }
-  const data = await response.json();
-  return data?.data || data || null;
+  return result?.data || null;
 };
 
 const textTemplates = {
@@ -1106,7 +1111,26 @@ app.post('/api/notify/repair-ready', requireAuth, requireRole('service'), async 
 
 app.post('/api/webhooks/email-inbound', async (req, res) => {
   try {
-    if (EMAIL_WEBHOOK_SECRET) {
+    let parsedPayload = req.body || {};
+    const hasSvixHeaders =
+      Boolean(req.headers['svix-id']) &&
+      Boolean(req.headers['svix-timestamp']) &&
+      Boolean(req.headers['svix-signature']);
+
+    if (hasSvixHeaders && RESEND_WEBHOOK_SECRET && resendClient) {
+      parsedPayload = resendClient.webhooks.verify({
+        payload: req.rawBody || JSON.stringify(req.body || {}),
+        headers: {
+          id: req.headers['svix-id'],
+          timestamp: req.headers['svix-timestamp'],
+          signature: req.headers['svix-signature'],
+        },
+        webhookSecret: RESEND_WEBHOOK_SECRET,
+      });
+      if (parsedPayload?.type !== 'email.received') {
+        return res.json({ ok: true, ignored: true });
+      }
+    } else if (EMAIL_WEBHOOK_SECRET) {
       const providedSecret =
         req.query.secret ||
         req.headers['x-webhook-secret'] ||
@@ -1117,7 +1141,7 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
       }
     }
 
-    const inbound = parseInboundEmailPayload(req.body || {});
+    const inbound = parseInboundEmailPayload(parsedPayload);
     if (inbound.provider === 'resend' && !inbound.text && inbound.emailId) {
       try {
         const received = await loadResendReceivedEmail(inbound.emailId);
@@ -1181,11 +1205,11 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
         await sendDecisionAcknowledgement({
           ticket,
           decision: 'yes',
-          channel: 'sms',
-          smsTo: from,
+          channel: 'email',
+          emailTo: inbound.from,
         });
       } catch (error) {
-        console.error('SMS acknowledgement send failed (yes):', error);
+        console.error('Email acknowledgement send failed (yes):', error);
       }
     } else if (decision === 'no') {
       await query(
@@ -1198,11 +1222,11 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
         await sendDecisionAcknowledgement({
           ticket,
           decision: 'no',
-          channel: 'sms',
-          smsTo: from,
+          channel: 'email',
+          emailTo: inbound.from,
         });
       } catch (error) {
-        console.error('SMS acknowledgement send failed (no):', error);
+        console.error('Email acknowledgement send failed (no):', error);
       }
     }
 
