@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, ChevronDown, ChevronRight, User, Smartphone, Mail, Phone, Calendar, Languages, Edit2, ShieldCheck, PenLine as FilePenLine, Wrench, DollarSign, Printer, Sparkles, EyeOff, Eye } from 'lucide-react';
+import { Loader2, ChevronDown, ChevronRight, User, Smartphone, Mail, Phone, Calendar, Languages, Edit2, ShieldCheck, PenLine as FilePenLine, Wrench, DollarSign, Printer, Sparkles, EyeOff, Eye, MessageSquare, Send } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -34,6 +34,20 @@ const languageMap = {
   uk: 'Українська'
 };
 
+const decisionMap = {
+  approved: { label: 'Kund svar: Godkänd', className: 'bg-green-100 text-green-800 border-green-300' },
+  declined: { label: 'Kund svar: Nekad', className: 'bg-red-100 text-red-800 border-red-300' },
+  unknown: { label: 'Kund svar: Oklart svar', className: 'bg-yellow-100 text-yellow-800 border-yellow-300' },
+};
+
+const channelLabel = (channel) => {
+  if (!channel) return 'okänd kanal';
+  if (channel === 'sms+email') return 'SMS + e-post';
+  if (channel === 'sms') return 'SMS';
+  if (channel === 'email') return 'E-post';
+  return channel;
+};
+
 export const TicketRow = ({ ticket, onUpdate }) => {
   const { role } = useSupabaseAuth();
   const canEdit = role !== 'base';
@@ -47,6 +61,8 @@ export const TicketRow = ({ ticket, onUpdate }) => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedTemplateType, setSelectedTemplateType] = useState(null);
   const { toast } = useToast();
+  const customerDecision = decisionMap[ticket.last_customer_decision] || null;
+
   useEffect(() => {
     setWorkDoneSummary(ticket.work_done_summary || '');
     setFinalCost(ticket.final_cost || '');
@@ -254,6 +270,40 @@ export const TicketRow = ({ ticket, onUpdate }) => {
 
               <div className="space-y-4">
                  <h3 className="font-semibold text-gray-800 flex items-center gap-2"><Edit2 size={16} />Hantering</h3>
+                 <div className="space-y-2">
+                  <div className={`rounded-lg border p-3 text-sm ${customerDecision ? customerDecision.className : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                    <p className="font-semibold flex items-center gap-2">
+                      <MessageSquare size={14} />
+                      {customerDecision ? customerDecision.label : 'Kund svar: Saknas'}
+                    </p>
+                    {ticket.last_customer_response_text && (
+                      <p className="mt-1 break-words">
+                        {ticket.last_customer_response_text}
+                      </p>
+                    )}
+                    {ticket.last_customer_response_at && (
+                      <p className="mt-1 text-xs opacity-80">
+                        {new Date(ticket.last_customer_response_at).toLocaleString('sv-SE')} via {channelLabel(ticket.last_customer_response_channel)}
+                      </p>
+                    )}
+                  </div>
+                  <div className="rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-700">
+                    <p className="font-semibold flex items-center gap-2">
+                      <Send size={14} />
+                      Senast kontaktad av personal
+                    </p>
+                    {ticket.last_staff_contact_by ? (
+                      <>
+                        <p className="mt-1">{ticket.last_staff_contact_by}</p>
+                        <p className="text-xs text-gray-500">
+                          {ticket.last_staff_contact_at ? new Date(ticket.last_staff_contact_at).toLocaleString('sv-SE') : 'Tid saknas'} via {channelLabel(ticket.last_staff_contact_channel)}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="mt-1 text-gray-500">Ingen kontakt loggad ännu.</p>
+                    )}
+                  </div>
+                 </div>
                 <div className="grid grid-cols-1 gap-4">
                   <div>
                     <Label htmlFor={`diagnosis-${ticket.id}`} className="text-sm font-medium text-gray-700 flex items-center gap-2 mb-2">

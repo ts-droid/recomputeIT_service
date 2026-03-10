@@ -868,6 +868,7 @@ app.post('/api/notify/cost-proposal', requireAuth, requireRole('service'), async
     const translatedBody = await translateIfNeeded(template.body, language);
     const translatedSubject = await translateIfNeeded(template.subject, language);
     const delivery = { sms_sent: false, email_sent: false, warnings: [] };
+    const sender = req.user?.email || 'okänd';
 
     if (channel === 'sms') {
       if (!ticket.customer_phone) {
@@ -967,9 +968,22 @@ app.post('/api/notify/cost-proposal', requireAuth, requireRole('service'), async
       delivery.email_sent = true;
     }
 
+    const sentChannels =
+      delivery.sms_sent && delivery.email_sent
+        ? 'sms+email'
+        : delivery.sms_sent
+          ? 'sms'
+          : 'email';
+
     await query(
-      `UPDATE service_tickets SET status = $1, customer_notified_at = NOW() WHERE id = $2`,
-      ['Väntar på kund', ticket.id]
+      `UPDATE service_tickets
+       SET status = $1,
+           customer_notified_at = NOW(),
+           last_staff_contact_at = NOW(),
+           last_staff_contact_by = $3,
+           last_staff_contact_channel = $4
+       WHERE id = $2`,
+      ['Väntar på kund', ticket.id, sender, sentChannels]
     );
 
     res.json({ ok: true, ...delivery });
@@ -998,6 +1012,7 @@ app.post('/api/notify/repair-ready', requireAuth, requireRole('service'), async 
     const translatedBody = await translateIfNeeded(template.body, language);
     const translatedSubject = await translateIfNeeded(template.subject, language);
     const delivery = { sms_sent: false, email_sent: false, warnings: [] };
+    const sender = req.user?.email || 'okänd';
 
     if (channel === 'sms') {
       if (!ticket.customer_phone) {
@@ -1097,9 +1112,23 @@ app.post('/api/notify/repair-ready', requireAuth, requireRole('service'), async 
       delivery.email_sent = true;
     }
 
+    const sentChannels =
+      delivery.sms_sent && delivery.email_sent
+        ? 'sms+email'
+        : delivery.sms_sent
+          ? 'sms'
+          : 'email';
+
     await query(
-      `UPDATE service_tickets SET status = $1, completed_at = COALESCE(completed_at, NOW()), customer_notified_at = NOW() WHERE id = $2`,
-      ['Färdig', ticket.id]
+      `UPDATE service_tickets
+       SET status = $1,
+           completed_at = COALESCE(completed_at, NOW()),
+           customer_notified_at = NOW(),
+           last_staff_contact_at = NOW(),
+           last_staff_contact_by = $3,
+           last_staff_contact_channel = $4
+       WHERE id = $2`,
+      ['Färdig', ticket.id, sender, sentChannels]
     );
 
     res.json({ ok: true, ...delivery });
@@ -1197,9 +1226,14 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
     if (decision === 'yes') {
       await query(
         `UPDATE service_tickets
-         SET cost_proposal_approved = true, status = $1
+         SET cost_proposal_approved = true,
+             status = $1,
+             last_customer_decision = 'approved',
+             last_customer_response_text = $3,
+             last_customer_response_channel = 'email',
+             last_customer_response_at = NOW()
          WHERE id = $2`,
-        ['Kostnadsförslag godkänt', ticket.id]
+        ['Kostnadsförslag godkänt', ticket.id, inbound.text || inbound.subject || '']
       );
       try {
         await sendDecisionAcknowledgement({
@@ -1214,9 +1248,14 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
     } else if (decision === 'no') {
       await query(
         `UPDATE service_tickets
-         SET cost_proposal_approved = false, status = $1
+         SET cost_proposal_approved = false,
+             status = $1,
+             last_customer_decision = 'declined',
+             last_customer_response_text = $3,
+             last_customer_response_channel = 'email',
+             last_customer_response_at = NOW()
          WHERE id = $2`,
-        ['Kostnadsförslag nekat', ticket.id]
+        ['Kostnadsförslag nekat', ticket.id, inbound.text || inbound.subject || '']
       );
       try {
         await sendDecisionAcknowledgement({
@@ -1228,6 +1267,16 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
       } catch (error) {
         console.error('Email acknowledgement send failed (no):', error);
       }
+    } else {
+      await query(
+        `UPDATE service_tickets
+         SET last_customer_decision = 'unknown',
+             last_customer_response_text = $2,
+             last_customer_response_channel = 'email',
+             last_customer_response_at = NOW()
+         WHERE id = $1`,
+        [ticket.id, inbound.text || inbound.subject || '']
+      );
     }
 
     return res.json({ ok: true, matched: true, ticket_number: ticket.ticket_number, decision });
@@ -1276,40 +1325,60 @@ app.post('/api/webhooks/46elks', async (req, res) => {
     if (decision === 'yes') {
       await query(
         `UPDATE service_tickets
-         SET cost_proposal_approved = true, status = $1
+         SET cost_proposal_approved = true,
+             status = $1,
+             last_customer_decision = 'approved',
+             last_customer_response_text = $3,
+             last_customer_response_channel = 'sms',
+             last_customer_response_at = NOW()
          WHERE id = $2`,
-        ['Kostnadsförslag godkänt', ticket.id]
+        ['Kostnadsförslag godkänt', ticket.id, message]
       );
       try {
         await sendDecisionAcknowledgement({
           ticket,
           decision: 'yes',
-          channel: 'email',
-          emailTo: inbound.from,
+          channel: 'sms',
+          smsTo: from,
         });
       } catch (error) {
-        console.error('Email acknowledgement send failed (yes):', error);
+        console.error('SMS acknowledgement send failed (yes):', error);
       }
     } else if (decision === 'no') {
       await query(
         `UPDATE service_tickets
-         SET cost_proposal_approved = false, status = $1
+         SET cost_proposal_approved = false,
+             status = $1,
+             last_customer_decision = 'declined',
+             last_customer_response_text = $3,
+             last_customer_response_channel = 'sms',
+             last_customer_response_at = NOW()
          WHERE id = $2`,
-        ['Kostnadsförslag nekat', ticket.id]
+        ['Kostnadsförslag nekat', ticket.id, message]
       );
       try {
         await sendDecisionAcknowledgement({
           ticket,
           decision: 'no',
-          channel: 'email',
-          emailTo: inbound.from,
+          channel: 'sms',
+          smsTo: from,
         });
       } catch (error) {
-        console.error('Email acknowledgement send failed (no):', error);
+        console.error('SMS acknowledgement send failed (no):', error);
       }
+    } else {
+      await query(
+        `UPDATE service_tickets
+         SET last_customer_decision = 'unknown',
+             last_customer_response_text = $2,
+             last_customer_response_channel = 'sms',
+             last_customer_response_at = NOW()
+         WHERE id = $1`,
+        [ticket.id, message]
+      );
     }
 
-    return res.json({ ok: true });
+    return res.json({ ok: true, decision });
   } catch (error) {
     console.error('46elks webhook error:', error);
     return res.status(500).json({ error: 'Webhook error' });

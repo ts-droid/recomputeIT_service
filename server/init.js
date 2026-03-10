@@ -22,6 +22,13 @@ export async function initDb() {
   await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ`);
   await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS customer_phone_normalized TEXT`);
   await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS customer_phone_normalized TEXT`);
+  await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS last_customer_response_text TEXT`);
+  await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS last_customer_response_at TIMESTAMPTZ`);
+  await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS last_customer_response_channel TEXT`);
+  await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS last_customer_decision TEXT`);
+  await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS last_staff_contact_at TIMESTAMPTZ`);
+  await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS last_staff_contact_by TEXT`);
+  await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS last_staff_contact_channel TEXT`);
   await query(
     `DO $$
      BEGIN

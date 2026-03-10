@@ -35,7 +35,14 @@ CREATE TABLE IF NOT EXISTS service_tickets (
   completed_at TIMESTAMPTZ,
   customer_notified_at TIMESTAMPTZ,
   picked_up_at TIMESTAMPTZ,
-  closed_at TIMESTAMPTZ
+  closed_at TIMESTAMPTZ,
+  last_customer_response_text TEXT,
+  last_customer_response_at TIMESTAMPTZ,
+  last_customer_response_channel TEXT,
+  last_customer_decision TEXT,
+  last_staff_contact_at TIMESTAMPTZ,
+  last_staff_contact_by TEXT,
+  last_staff_contact_channel TEXT
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS service_tickets_ticket_number_idx ON service_tickets (ticket_number);
