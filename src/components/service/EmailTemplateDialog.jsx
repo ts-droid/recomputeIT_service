@@ -137,6 +137,7 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
         body: JSON.stringify({
           ticketId: ticket.id,
           channel,
+          language: currentLang,
         }),
       });
 

@@ -843,12 +843,15 @@ app.post('/api/admin/test-email', requireAuth, requireRole('admin'), async (req,
 
 app.post('/api/notify/cost-proposal', requireAuth, requireRole('service'), async (req, res) => {
   try {
-    const { ticketId, channel } = req.body || {};
+    const { ticketId, channel, language: requestedLanguage } = req.body || {};
     const { rows } = await query('SELECT * FROM service_tickets WHERE id = $1', [ticketId]);
     const ticket = rows[0];
     if (!ticket) return res.status(404).json({ error: 'Ärende hittades inte.' });
 
-    const language = getLanguage(ticket);
+    const language = requestedLanguage || getLanguage(ticket);
+    if (requestedLanguage && requestedLanguage !== ticket.disclaimer_language) {
+      await query(`UPDATE service_tickets SET disclaimer_language = $1 WHERE id = $2`, [requestedLanguage, ticket.id]);
+    }
     const amount = ticket.final_cost || '—';
     const messageBase =
       textTemplates.costProposal[language]?.(ticket, amount) ||
@@ -973,12 +976,15 @@ app.post('/api/notify/cost-proposal', requireAuth, requireRole('service'), async
 
 app.post('/api/notify/repair-ready', requireAuth, requireRole('service'), async (req, res) => {
   try {
-    const { ticketId, channel } = req.body || {};
+    const { ticketId, channel, language: requestedLanguage } = req.body || {};
     const { rows } = await query('SELECT * FROM service_tickets WHERE id = $1', [ticketId]);
     const ticket = rows[0];
     if (!ticket) return res.status(404).json({ error: 'Ärende hittades inte.' });
 
-    const language = getLanguage(ticket);
+    const language = requestedLanguage || getLanguage(ticket);
+    if (requestedLanguage && requestedLanguage !== ticket.disclaimer_language) {
+      await query(`UPDATE service_tickets SET disclaimer_language = $1 WHERE id = $2`, [requestedLanguage, ticket.id]);
+    }
     const messageBase =
       textTemplates.repairReady[language]?.(ticket) || textTemplates.repairReady.sv(ticket);
     const message = await translateIfNeeded(messageBase, language);
