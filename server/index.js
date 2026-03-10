@@ -37,6 +37,7 @@ const ELKS_API_USERNAME = process.env.ELKS_API_USERNAME || '';
 const ELKS_API_PASSWORD = process.env.ELKS_API_PASSWORD || '';
 const ELKS_SMS_FROM = process.env.ELKS_SMS_FROM || '';
 const ELKS_WEBHOOK_SECRET = process.env.ELKS_WEBHOOK_SECRET || '';
+const SMS_DEFAULT_COUNTRY_CODE = process.env.SMS_DEFAULT_COUNTRY_CODE || '+46';
 
 const SMTP_HOST = process.env.SMTP_HOST || '';
 const SMTP_PORT = Number(process.env.SMTP_PORT || 587);
@@ -116,6 +117,16 @@ const normalizePhone = (phone) => {
     return `+${trimmed.replace(/[^\d]/g, '')}`;
   }
   return trimmed.replace(/[^\d]/g, '');
+};
+
+const toSmsNumber = (phone) => {
+  const normalized = normalizePhone(phone);
+  if (!normalized) return '';
+  if (normalized.startsWith('+')) return normalized;
+  if (normalized.startsWith('00')) return `+${normalized.slice(2)}`;
+  if (normalized.startsWith('0')) return `${SMS_DEFAULT_COUNTRY_CODE}${normalized.slice(1)}`;
+  if (/^\d+$/.test(normalized)) return `+${normalized}`;
+  return normalized;
 };
 
 const getLanguage = (ticket) => ticket?.disclaimer_language || 'sv';
@@ -204,9 +215,14 @@ const sendSms = async ({ to, message }) => {
     throw new Error('SMS credentials missing');
   }
 
+  const smsTo = toSmsNumber(to);
+  if (!/^\+\d{6,15}$/.test(smsTo)) {
+    throw new Error(`Invalid phone number format for SMS: ${to}`);
+  }
+
   const params = new URLSearchParams({
     from: ELKS_SMS_FROM,
-    to,
+    to: smsTo,
     message,
   });
 
