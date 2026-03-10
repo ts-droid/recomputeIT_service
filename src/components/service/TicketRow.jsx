@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, ChevronDown, ChevronRight, User, Smartphone, Mail, Phone, Calendar, Languages, Edit2, ShieldCheck, PenLine as FilePenLine, Wrench, DollarSign, Printer, Sparkles, EyeOff, Eye, MessageSquare, Send } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -68,6 +68,14 @@ export const TicketRow = ({ ticket, onUpdate }) => {
   const { toast } = useToast();
   const customerDecision = decisionMap[ticket.last_customer_decision] || null;
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+  const sortedMessages = useMemo(
+    () => [...messages].sort((a, b) => new Date(a.created_at) - new Date(b.created_at)),
+    [messages]
+  );
+  const latestInboundMessage = useMemo(
+    () => [...messages].find((msg) => msg.direction === 'inbound' && (msg.body || msg.subject)),
+    [messages]
+  );
 
   useEffect(() => {
     setWorkDoneSummary(ticket.work_done_summary || '');
@@ -336,8 +344,8 @@ export const TicketRow = ({ ticket, onUpdate }) => {
                       {customerDecision ? customerDecision.label : 'Kund svar: Saknas'}
                     </p>
                     {ticket.last_customer_response_text && (
-                      <p className="mt-1 break-words">
-                        {ticket.last_customer_response_text}
+                      <p className="mt-1 break-words whitespace-pre-wrap max-h-28 overflow-y-auto">
+                        {latestInboundMessage?.body || latestInboundMessage?.subject || ticket.last_customer_response_text}
                       </p>
                     )}
                     {ticket.last_customer_response_at && (
@@ -365,23 +373,32 @@ export const TicketRow = ({ ticket, onUpdate }) => {
                 </div>
                 <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-3">
                   <p className="font-semibold text-sm text-gray-800">Kommunikation</p>
-                  <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
+                  <div className="max-h-80 overflow-y-auto space-y-2 pr-1 rounded-lg border border-gray-200 bg-[#f5efe5] p-3">
                     {loadingMessages ? (
                       <p className="text-xs text-gray-500">Laddar...</p>
                     ) : messages.length === 0 ? (
                       <p className="text-xs text-gray-500">Ingen kommunikation loggad ännu.</p>
                     ) : (
-                      messages.map((msg) => (
-                        <div key={msg.id} className={`rounded-md p-2 text-xs border ${msg.direction === 'outbound' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'}`}>
+                      sortedMessages.map((msg) => (
+                        <div
+                          key={msg.id}
+                          className={`flex ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}
+                        >
+                          <div className={`max-w-[88%] rounded-xl p-3 text-xs border shadow-sm ${
+                            msg.direction === 'outbound'
+                              ? 'bg-green-100 border-green-200 text-gray-800'
+                              : 'bg-white border-gray-200 text-gray-800'
+                          }`}>
                           <p className="font-semibold text-gray-700">
-                            {msg.direction === 'outbound' ? 'Utgående' : 'Inkommande'} · {channelLabel(msg.channel)}
+                            {msg.direction === 'outbound' ? 'Ni' : 'Kund'} · {channelLabel(msg.channel)}
                           </p>
-                          {msg.subject && <p className="text-gray-700 mt-1">{msg.subject}</p>}
-                          {msg.body && <p className="text-gray-600 mt-1 break-words whitespace-pre-wrap">{msg.body}</p>}
-                          <p className="text-gray-500 mt-1">
+                          {msg.subject && <p className="text-gray-700 mt-1 break-words">{msg.subject}</p>}
+                          {msg.body && <p className="text-gray-700 mt-1 break-words whitespace-pre-wrap">{msg.body}</p>}
+                          <p className="text-gray-500 mt-2 text-[11px]">
                             {new Date(msg.created_at).toLocaleString('sv-SE')}
                             {msg.sender_user ? ` · ${msg.sender_user}` : ''}
                           </p>
+                          </div>
                         </div>
                       ))
                     )}
@@ -394,21 +411,23 @@ export const TicketRow = ({ ticket, onUpdate }) => {
                         placeholder="Ämne"
                         className="bg-white"
                       />
-                      <Textarea
-                        value={composeBody}
-                        onChange={(e) => setComposeBody(e.target.value)}
-                        placeholder="Skriv e-post till kunden..."
-                        className="bg-white min-h-[90px]"
-                      />
-                      <Button
-                        size="sm"
-                        onClick={handleSendManualEmail}
-                        disabled={isSendingManual || !ticket.customer_email}
-                        className="w-full"
-                      >
-                        {isSendingManual ? <Loader2 size={14} className="mr-2 animate-spin" /> : <Mail size={14} className="mr-2" />}
-                        Skicka e-post till kund
-                      </Button>
+                      <div className="flex gap-2 items-end">
+                        <Textarea
+                          value={composeBody}
+                          onChange={(e) => setComposeBody(e.target.value)}
+                          placeholder="Skriv meddelande till kunden..."
+                          className="bg-white min-h-[70px]"
+                        />
+                        <Button
+                          size="icon"
+                          onClick={handleSendManualEmail}
+                          disabled={isSendingManual || !ticket.customer_email}
+                          className="h-10 w-10 shrink-0"
+                          title="Skicka"
+                        >
+                          {isSendingManual ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </div>
