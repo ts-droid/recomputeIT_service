@@ -213,6 +213,7 @@ const parseInboundEmailPayload = (body) => {
     to,
     subject,
     text,
+    emailId: firstString(body, ['data.email_id', 'email_id']),
   };
 };
 
@@ -228,6 +229,23 @@ const extractTicketNumber = (subject = '', text = '') => {
     if (match?.[1]) return Number(match[1]);
   }
   return null;
+};
+
+const loadResendReceivedEmail = async (emailId) => {
+  if (!RESEND_API_KEY || !emailId) return null;
+  const response = await fetch(`https://api.resend.com/emails/receiving/${emailId}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Resend receiving get failed (${response.status}): ${errorText}`);
+  }
+  const data = await response.json();
+  return data?.data || data || null;
 };
 
 const textTemplates = {
@@ -1022,6 +1040,16 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
     }
 
     const inbound = parseInboundEmailPayload(req.body || {});
+    if (inbound.provider === 'resend' && !inbound.text && inbound.emailId) {
+      try {
+        const received = await loadResendReceivedEmail(inbound.emailId);
+        inbound.text =
+          firstString(received, ['text', 'data.text', 'html', 'data.html']) || inbound.text;
+      } catch (error) {
+        console.error('Resend receiving fetch failed:', error);
+      }
+    }
+
     if (!inbound.from || (!inbound.subject && !inbound.text)) {
       return res.status(400).json({ error: 'Invalid inbound email payload' });
     }
