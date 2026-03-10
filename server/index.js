@@ -168,8 +168,37 @@ const resolvePreferredContactChannel = (ticketOrPayload = {}) => {
   return '';
 };
 
+const EMAIL_REPLY_MARKERS = [
+  '----- svara ovanför denna linje -----',
+  '----- reply above this line -----',
+  '----- الرد فوق هذا السطر -----',
+  '----- responda encima de esta línea -----',
+  '----- vastaa tämän rivin yläpuolelle -----',
+  '----- li ser vê rêzê bersiv bidin -----',
+  '----- bu satırın üstüne yanıtlayın -----',
+  '----- odpowiedz powyżej tej linii -----',
+  '----- відповідайте вище цього рядка -----',
+];
+
+const getReplyMarkerLine = (language = 'sv') =>
+  language === 'en' ? '----- Reply above this line -----' : '----- Svara ovanför denna linje -----';
+
+const extractTopReplyText = (rawMessage = '') => {
+  const message = String(rawMessage || '').replace(/\r/g, '').trim();
+  if (!message) return '';
+  const lower = message.toLowerCase();
+  let cutoff = lower.length;
+
+  for (const marker of EMAIL_REPLY_MARKERS) {
+    const idx = lower.indexOf(marker);
+    if (idx !== -1 && idx < cutoff) cutoff = idx;
+  }
+
+  return message.slice(0, cutoff).trim() || message;
+};
+
 const parseApprovalDecision = (rawMessage = '') => {
-  const message = String(rawMessage || '').trim();
+  const message = extractTopReplyText(rawMessage);
   if (!message) return null;
 
   // Try to focus on customer's own reply, not quoted thread below.
@@ -563,15 +592,20 @@ const sendDecisionClarification = async ({ ticket, channel, smsTo, emailTo }) =>
   }
 
   if (channel === 'email' && emailTo) {
+    const language = getLanguage(ticket);
+    const marker = getReplyMarkerLine(language);
+    const bodyWithMarker = template.body?.toLowerCase().includes(marker.toLowerCase())
+      ? template.body
+      : `${template.body}\n\n${marker}`;
     await sendEmail({
       to: emailTo,
       subject: template.subject,
-      body: template.body,
+      body: bodyWithMarker,
     });
     await query(
       `INSERT INTO message_logs (ticket_id, channel, direction, to_number, subject, body, provider)
        VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [ticket.id, 'email', 'outbound', emailTo, template.subject, template.body, 'smtp']
+      [ticket.id, 'email', 'outbound', emailTo, template.subject, bodyWithMarker, 'smtp']
     );
   }
 };
@@ -628,21 +662,21 @@ const emailTemplates = {
   costProposal: {
     sv: (ticket, amount) => ({
       subject: `Kostnadsförslag för ärende #${ticket.ticket_number}`,
-      body: `Hej ${ticket.customer_name},\n\nVi har tagit fram ett kostnadsförslag för ditt ärende (#${ticket.ticket_number}).\nKostnad: ${amount} kr.\n\nSvara gärna på detta mail eller via SMS med JA för godkännande, eller NEJ om du vill avböja.\n\nVänliga hälsningar\nre:Compute-IT`,
+      body: `Hej ${ticket.customer_name},\n\nVi har tagit fram ett kostnadsförslag för ditt ärende (#${ticket.ticket_number}).\nKostnad: ${amount} kr.\n\nSvara gärna på detta mail eller via SMS med JA för godkännande, eller NEJ om du vill avböja.\n\n${getReplyMarkerLine('sv')}\nSkriv ditt svar på raden ovan.\n\nVänliga hälsningar\nre:Compute-IT`,
     }),
     en: (ticket, amount) => ({
       subject: `Cost proposal for case #${ticket.ticket_number}`,
-      body: `Hi ${ticket.customer_name},\n\nWe have prepared a cost proposal for your case (#${ticket.ticket_number}).\nCost: ${amount} SEK.\n\nPlease reply with YES to approve, or NO to decline.\n\nBest regards\nre:Compute-IT`,
+      body: `Hi ${ticket.customer_name},\n\nWe have prepared a cost proposal for your case (#${ticket.ticket_number}).\nCost: ${amount} SEK.\n\nPlease reply with YES to approve, or NO to decline.\n\n${getReplyMarkerLine('en')}\nWrite your response on the line above.\n\nBest regards\nre:Compute-IT`,
     }),
   },
   repairReady: {
     sv: (ticket) => ({
       subject: `Din enhet är klar (#${ticket.ticket_number})`,
-      body: `Hej ${ticket.customer_name},\n\nDin enhet är klar för upphämtning. Välkommen in!\n\nVänliga hälsningar\nre:Compute-IT`,
+      body: `Hej ${ticket.customer_name},\n\nDin enhet är klar för upphämtning. Välkommen in!\n\n${getReplyMarkerLine('sv')}\nSkriv ditt svar på raden ovan.\n\nVänliga hälsningar\nre:Compute-IT`,
     }),
     en: (ticket) => ({
       subject: `Your device is ready (#${ticket.ticket_number})`,
-      body: `Hi ${ticket.customer_name},\n\nYour device is ready for pickup. Welcome in!\n\nBest regards\nre:Compute-IT`,
+      body: `Hi ${ticket.customer_name},\n\nYour device is ready for pickup. Welcome in!\n\n${getReplyMarkerLine('en')}\nWrite your response on the line above.\n\nBest regards\nre:Compute-IT`,
     }),
   },
 };
@@ -1206,7 +1240,11 @@ app.post('/api/tickets/:id/messages', requireAuth, requireRole('service'), async
       translateIfNeeded(baseBody, language, { allowEnglish: true }),
     ]);
     const resolvedSubject = translatedSubject?.toString().trim() || baseSubject;
-    const resolvedBody = translatedBody?.toString().trim() || baseBody;
+    let resolvedBody = translatedBody?.toString().trim() || baseBody;
+    const marker = getReplyMarkerLine(language);
+    if (!resolvedBody.toLowerCase().includes(marker.toLowerCase())) {
+      resolvedBody = `${resolvedBody}\n\n${marker}`;
+    }
     if (!resolvedBody) {
       return res.status(400).json({ error: 'Meddelandetext saknas efter översättning.' });
     }
@@ -1932,12 +1970,13 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
       ]
     );
 
-    let decision = parseApprovalDecision(`${inbound.subject}\n${inbound.text}`);
+    const inboundReplyText = extractTopReplyText(inbound.text || inbound.subject || '') || (inbound.subject || '');
+    let decision = parseApprovalDecision(`${inbound.subject}\n${inboundReplyText}`);
     if (!decision && !inbound.text && req.rawBody) {
       const fallbackSnippet = extractReplySnippetFromRawWebhook(req.rawBody);
       if (fallbackSnippet) {
         inbound.text = fallbackSnippet;
-        decision = parseApprovalDecision(fallbackSnippet);
+        decision = parseApprovalDecision(extractTopReplyText(fallbackSnippet));
       }
     }
     if (decision === 'yes') {
@@ -1950,7 +1989,7 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
              last_customer_response_channel = 'email',
              last_customer_response_at = NOW()
          WHERE id = $2`,
-        ['Kostnadsförslag godkänt', ticket.id, inbound.text || inbound.subject || '']
+        ['Kostnadsförslag godkänt', ticket.id, inboundReplyText]
       );
       try {
         await sendDecisionAcknowledgement({
@@ -1972,7 +2011,7 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
              last_customer_response_channel = 'email',
              last_customer_response_at = NOW()
          WHERE id = $2`,
-        ['Kostnadsförslag nekat', ticket.id, inbound.text || inbound.subject || '']
+        ['Kostnadsförslag nekat', ticket.id, inboundReplyText]
       );
       try {
         await sendDecisionAcknowledgement({
@@ -1992,7 +2031,7 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
              last_customer_response_channel = 'email',
              last_customer_response_at = NOW()
          WHERE id = $1`,
-        [ticket.id, inbound.text || inbound.subject || '']
+        [ticket.id, inboundReplyText]
       );
       try {
         await sendDecisionClarification({
