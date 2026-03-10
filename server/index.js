@@ -430,6 +430,55 @@ const sendDecisionAcknowledgement = async ({ ticket, decision, channel, smsTo, e
   }
 };
 
+const buildClarificationTemplate = async (ticket) => {
+  const lang = getLanguage(ticket);
+  const subjectSv = `Bekräfta svar för ärende #${ticket.ticket_number}`;
+  const bodySv =
+    `Hej ${ticket.customer_name},\n\n` +
+    `Vi kunde inte tolka ditt senaste svar för ärende #${ticket.ticket_number}.\n` +
+    `Svara endast med JA för att godkänna kostnadsförslaget eller NEJ för att neka.\n\n` +
+    `Tack!`;
+  const smsSv =
+    `Vi kunde inte tolka ditt svar för ärende #${ticket.ticket_number}. ` +
+    `Svara endast JA för godkänna eller NEJ för neka.`;
+
+  if (lang === 'sv') {
+    return { subject: subjectSv, body: bodySv, sms: smsSv };
+  }
+
+  const subject = await translateIfNeeded(subjectSv, lang, { allowEnglish: true });
+  const body = await translateIfNeeded(bodySv, lang, { allowEnglish: true });
+  const sms = await translateIfNeeded(smsSv, lang, { allowEnglish: true });
+  return { subject, body, sms };
+};
+
+const sendDecisionClarification = async ({ ticket, channel, smsTo, emailTo }) => {
+  const template = await buildClarificationTemplate(ticket);
+
+  if (channel === 'sms' && smsTo) {
+    await sendSms({ to: smsTo, message: template.sms });
+    await query(
+      `INSERT INTO message_logs (ticket_id, channel, direction, to_number, body, provider)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [ticket.id, 'sms', 'outbound', smsTo, template.sms, '46elks']
+    );
+    return;
+  }
+
+  if (channel === 'email' && emailTo) {
+    await sendEmail({
+      to: emailTo,
+      subject: template.subject,
+      body: template.body,
+    });
+    await query(
+      `INSERT INTO message_logs (ticket_id, channel, direction, to_number, subject, body, provider)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [ticket.id, 'email', 'outbound', emailTo, template.subject, template.body, 'smtp']
+    );
+  }
+};
+
 const loadResendReceivedEmail = async (emailId) => {
   if (!resendClient || !emailId) return null;
   if (resendClient?.emails?.receiving?.get) {
@@ -1635,6 +1684,15 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
          WHERE id = $1`,
         [ticket.id, inbound.text || inbound.subject || '']
       );
+      try {
+        await sendDecisionClarification({
+          ticket,
+          channel: 'email',
+          emailTo: inbound.from,
+        });
+      } catch (error) {
+        console.error('Email clarification send failed (unknown):', error);
+      }
     }
 
     return res.json({ ok: true, matched: true, ticket_number: ticket.ticket_number, decision });
@@ -1734,6 +1792,15 @@ app.post('/api/webhooks/46elks', async (req, res) => {
          WHERE id = $1`,
         [ticket.id, message]
       );
+      try {
+        await sendDecisionClarification({
+          ticket,
+          channel: 'sms',
+          smsTo: from,
+        });
+      } catch (error) {
+        console.error('SMS clarification send failed (unknown):', error);
+      }
     }
 
     return res.json({ ok: true, decision });
