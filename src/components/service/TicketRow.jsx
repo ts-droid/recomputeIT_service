@@ -6,6 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/use-toast';
 import { printFinalReceipt, printDocuments } from '@/lib/print';
 import { Button } from '@/components/ui/button';
@@ -65,6 +66,7 @@ export const TicketRow = ({ ticket, onUpdate }) => {
   const [composeSubject, setComposeSubject] = useState('');
   const [composeBody, setComposeBody] = useState('');
   const [isSendingManual, setIsSendingManual] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState(null);
   const { toast } = useToast();
   const customerDecision = decisionMap[ticket.last_customer_decision] || null;
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -344,7 +346,7 @@ export const TicketRow = ({ ticket, onUpdate }) => {
                       {customerDecision ? customerDecision.label : 'Kund svar: Saknas'}
                     </p>
                     {ticket.last_customer_response_text && (
-                      <p className="mt-1 break-words whitespace-pre-wrap max-h-28 overflow-y-auto">
+                      <p className="mt-1 break-words whitespace-pre-wrap">
                         {latestInboundMessage?.body || latestInboundMessage?.subject || ticket.last_customer_response_text}
                       </p>
                     )}
@@ -380,11 +382,13 @@ export const TicketRow = ({ ticket, onUpdate }) => {
                       <p className="text-xs text-gray-500">Ingen kommunikation loggad ännu.</p>
                     ) : (
                       sortedMessages.map((msg) => (
-                        <div
+                        <button
                           key={msg.id}
+                          type="button"
+                          onClick={() => setSelectedMessage(msg)}
                           className={`flex ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}
                         >
-                          <div className={`max-w-[88%] rounded-xl p-3 text-xs border shadow-sm ${
+                          <div className={`w-full rounded-xl p-3 text-xs border shadow-sm ${
                             msg.direction === 'outbound'
                               ? 'bg-green-100 border-green-200 text-gray-800'
                               : 'bg-white border-gray-200 text-gray-800'
@@ -399,7 +403,7 @@ export const TicketRow = ({ ticket, onUpdate }) => {
                             {msg.sender_user ? ` · ${msg.sender_user}` : ''}
                           </p>
                           </div>
-                        </div>
+                        </button>
                       ))
                     )}
                   </div>
@@ -609,6 +613,30 @@ export const TicketRow = ({ ticket, onUpdate }) => {
           </motion.div>
         )}
       </AnimatePresence>
+      <Dialog open={!!selectedMessage} onOpenChange={(open) => !open && setSelectedMessage(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Meddelandedetaljer</DialogTitle>
+          </DialogHeader>
+          {selectedMessage && (
+            <div className="space-y-3 text-sm">
+              <p className="text-gray-600">
+                {selectedMessage.direction === 'outbound' ? 'Utgående' : 'Inkommande'} · {channelLabel(selectedMessage.channel)} · {new Date(selectedMessage.created_at).toLocaleString('sv-SE')}
+              </p>
+              {selectedMessage.subject && (
+                <div>
+                  <p className="font-semibold text-gray-800">Ämne</p>
+                  <p className="mt-1 whitespace-pre-wrap break-words">{selectedMessage.subject}</p>
+                </div>
+              )}
+              <div>
+                <p className="font-semibold text-gray-800">Text</p>
+                <p className="mt-1 whitespace-pre-wrap break-words">{selectedMessage.body || '(Ingen brödtext mottagen i webhook)'}</p>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </motion.div>
   );
 };
