@@ -56,6 +56,7 @@ By accepting these terms, you confirm that you understand and agree to the above
 • نوصي بشدة بعمل نسخة احتياطية من جميع البيانات المهمة
 • قد يختلف وقت الإصلاح حسب العطل وتوفر قطع الغيار
 • توافق على أننا قد نحتاج إلى إعادة تعيين الجهاز إلى إعدادات المصنع
+• في حال رفض عرض السعر، يجب استلام الجهاز خلال 7 أيام، وإلا قد يتم التخلص منه
 
 بقبول هذه الشروط، تؤكد أنك تفهم وتوافق على ما سبق.`,
     acceptLabel: 'لقد قرأت ووافقت على الشروط',
@@ -74,6 +75,7 @@ By accepting these terms, you confirm that you understand and agree to the above
 • Recomendamos encarecidamente hacer una copia de seguridad de todos los datos importantes
 • El tiempo de reparación puede variar dependiendo de la falla y disponibilidad de repuestos
 • Usted acepta que podemos necesitar restablecer el dispositivo a la configuración de fábrica
+• Si se rechaza el presupuesto, el dispositivo debe recogerse dentro de 7 días; de lo contrario, puede desecharse
 
 Al aceptar estos términos, confirma que entiende y acepta lo anterior.`,
     acceptLabel: 'He leído y acepto los términos',
@@ -92,6 +94,7 @@ Al aceptar estos términos, confirma que entiende y acepta lo anterior.`,
 • Suosittelemme vahvasti kaikkien tärkeiden tietojen varmuuskopiointia
 • Korjausaika voi vaihdella vian ja varaosien saatavuuden mukaan
 • Hyväksyt, että saatamme joutua palauttamaan laitteen tehdasasetuksiin
+• Jos kustannusarvio hylätään, laite on noudettava 7 päivän kuluessa, muuten se voidaan hävittää
 
 Hyväksymällä nämä ehdot vahvistat ymmärtäväsi ja hyväksyväsi yllä olevat seikat.`,
     acceptLabel: 'Olen lukenut ja hyväksyn ehdot',
@@ -110,6 +113,7 @@ Hyväksymällä nämä ehdot vahvistat ymmärtäväsi ja hyväksyväsi yllä ole
 • Em bi tundî pêşniyar dikin ku hemî daneyên girîng paşve hilînin
 • Dema tamîrê dibe ku li gorî xeletî û hebûna parçeyan biguhere
 • Hûn qebûl dikin ku dibe ku em hewce bikin ku amûrê li mîhengên kargehê vegerînin
+• Heke pêşniyara bihayê were redkirin, divê amûr di nav 7 rojan de were standin, wekî din dibe ku were avêtin
 
 Bi qebûlkirina van şertan, hûn piştrast dikin ku hûn tiştên jorîn fêm dikin û qebûl dikin.`,
     acceptLabel: 'Min şert xwendin û qebûl dikim',
@@ -128,6 +132,7 @@ Bi qebûlkirina van şertan, hûn piştrast dikin ku hûn tiştên jorîn fêm d
 • Tüm önemli verilerinizi yedeklemenizi şiddetle tavsiye ederiz
 • Onarım süresi, arızaya ve parça bulunabilirliğine göre değişebilir
 • Cihazı fabrika ayarlarına sıfırlamamız gerekebileceğini kabul edersiniz
+• Fiyat teklifi reddedilirse cihaz 7 gün içinde teslim alınmalıdır, aksi takdirde imha edilebilir
 
 Bu şartları kabul ederek, yukarıdakileri anladığınızı ve kabul ettiğinizi onaylamış olursunuz.`,
     acceptLabel: 'Şartları okudum ve kabul ediyorum',
@@ -146,6 +151,7 @@ Bu şartları kabul ederek, yukarıdakileri anladığınızı ve kabul ettiğini
 • Zdecydowanie zalecamy wykonanie kopii zapasowej wszystkich ważnych danych
 • Czas naprawy może się różnić w zależności od usterki i dostępności części
 • Zgadzasz się, że możemy potrzebować przywrócić urządzenie do ustawień fabrycznych
+• W przypadku odrzucenia wyceny urządzenie należy odebrać w ciągu 7 dni, w przeciwnym razie może zostać zutylizowane
 
 Akceptując te warunki, potwierdzasz, że rozumiesz i zgadzasz się na powyższe.`,
     acceptLabel: 'Przeczytałem i akceptuję warunki',
@@ -164,6 +170,7 @@ Akceptując te warunki, potwierdzasz, że rozumiesz i zgadzasz się na powyższe
 • Ми настійно рекомендуємо створювати резервні копії всіх важливих даних
 • Час ремонту може змінюватися залежно від несправності та наявності запчастин
 • Ви погоджуєтеся, що нам може знадобитися скинути пристрій до заводських налаштувань
+• Якщо кошторис відхилено, пристрій потрібно забрати протягом 7 днів, інакше його можуть утилізувати
 
 Приймаючи ці умови, ви підтверджуєте, що розумієте та погоджуєтеся з вищезазначеним.`,
     acceptLabel: 'Я прочитав і приймаю умови',
