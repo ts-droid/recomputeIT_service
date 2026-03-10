@@ -712,21 +712,21 @@ const emailTemplates = {
   costProposal: {
     sv: (ticket, amount) => ({
       subject: `Kostnadsförslag för ärende #${ticket.ticket_number}`,
-      body: `Hej ${ticket.customer_name},\n\nVi har tagit fram ett kostnadsförslag för ditt ärende (#${ticket.ticket_number}).\nKostnad: ${amount} kr.\n\nSvara gärna på detta mail eller via SMS med JA för godkännande, eller NEJ om du vill avböja.\n\nVänliga hälsningar\nre:Compute-IT`,
+      body: `Hej ${ticket.customer_name},\n\nVi har tagit fram ett kostnadsförslag för ditt ärende (#${ticket.ticket_number}).\nKostnad: ${amount} kr.`,
     }),
     en: (ticket, amount) => ({
       subject: `Cost proposal for case #${ticket.ticket_number}`,
-      body: `Hi ${ticket.customer_name},\n\nWe have prepared a cost proposal for your case (#${ticket.ticket_number}).\nCost: ${amount} SEK.\n\nPlease reply with YES to approve, or NO to decline.\n\nBest regards\nre:Compute-IT`,
+      body: `Hi ${ticket.customer_name},\n\nWe have prepared a cost proposal for your case (#${ticket.ticket_number}).\nCost: ${amount} SEK.`,
     }),
   },
   repairReady: {
     sv: (ticket) => ({
       subject: `Din enhet är klar (#${ticket.ticket_number})`,
-      body: `Hej ${ticket.customer_name},\n\nDin enhet är klar för upphämtning. Välkommen in!\n\nVänliga hälsningar\nre:Compute-IT`,
+      body: `Hej ${ticket.customer_name},\n\nDin enhet är klar för upphämtning. Välkommen in!`,
     }),
     en: (ticket) => ({
       subject: `Your device is ready (#${ticket.ticket_number})`,
-      body: `Hi ${ticket.customer_name},\n\nYour device is ready for pickup. Welcome in!\n\nBest regards\nre:Compute-IT`,
+      body: `Hi ${ticket.customer_name},\n\nYour device is ready for pickup. Welcome in!`,
     }),
   },
 };
@@ -764,6 +764,44 @@ const decisionAckTemplates = {
       },
     },
   },
+};
+
+const DEFAULT_MESSAGE_SETTINGS = {
+  email_footer_by_lang: {
+    sv: 'Vänliga hälsningar\nre:Compute-IT',
+    en: 'Best regards\nre:Compute-IT',
+  },
+  sms_footer_by_lang: {
+    sv: 're:Compute-IT',
+    en: 're:Compute-IT',
+  },
+  cost_prompt_by_lang: {
+    sv: 'Svara gärna på detta mail eller via SMS med JA för godkännande, eller NEJ om du vill avböja.',
+    en: 'Please reply with YES to approve, or NO to decline.',
+  },
+  ready_prompt_by_lang: {
+    sv: 'Har du frågor, svara på detta mail eller SMS.',
+    en: 'If you have questions, reply to this email or SMS.',
+  },
+};
+
+const mergeMessageSettings = (raw) => {
+  const parsed = raw && typeof raw === 'object' ? raw : {};
+  const mergeByLang = (key) => ({
+    ...DEFAULT_MESSAGE_SETTINGS[key],
+    ...(parsed[key] && typeof parsed[key] === 'object' ? parsed[key] : {}),
+  });
+  return {
+    email_footer_by_lang: mergeByLang('email_footer_by_lang'),
+    sms_footer_by_lang: mergeByLang('sms_footer_by_lang'),
+    cost_prompt_by_lang: mergeByLang('cost_prompt_by_lang'),
+    ready_prompt_by_lang: mergeByLang('ready_prompt_by_lang'),
+  };
+};
+
+const getAdminMessageSettings = async () => {
+  const { rows } = await query('SELECT value_json FROM app_settings WHERE key = $1', ['message_templates']);
+  return mergeMessageSettings(rows[0]?.value_json || {});
 };
 
 const translateText = async (text, targetLanguage, options = {}) => {
@@ -881,6 +919,23 @@ const maybeAppendSwedishTranslation = async (_ticket, text) => {
   return `${text}\n\n(Svenska: ${translated})`;
 };
 
+const getLocalizedSetting = async (settingsByLang = {}, language = 'sv') => {
+  const direct = settingsByLang?.[language];
+  if (direct) return direct;
+  const baseSv = settingsByLang?.sv || '';
+  if (!baseSv) return '';
+  if (language === 'sv') return baseSv;
+  return translateIfNeeded(baseSv, language, { allowEnglish: true });
+};
+
+const appendUniqueBlock = (text = '', block = '') => {
+  const trimmedText = String(text || '').trim();
+  const trimmedBlock = String(block || '').trim();
+  if (!trimmedBlock) return trimmedText;
+  if (trimmedText.toLowerCase().includes(trimmedBlock.toLowerCase())) return trimmedText;
+  return `${trimmedText}\n\n${trimmedBlock}`.trim();
+};
+
 const localizeTicketFreeText = async (ticket, language, options = {}) => {
   if (!ticket || !language || language === 'sv') return ticket;
   const { strict = false } = options;
@@ -897,32 +952,43 @@ const localizeTicketFreeText = async (ticket, language, options = {}) => {
   };
 };
 
-const buildNotificationPreview = async ({ templateType, ticket, language }) => {
+const buildNotificationPreview = async ({ templateType, ticket, language, settings }) => {
   const localizedTicket = ticket;
+  const activeSettings = mergeMessageSettings(settings || {});
+  const emailFooter = await getLocalizedSetting(activeSettings.email_footer_by_lang, language);
+  const smsFooter = await getLocalizedSetting(activeSettings.sms_footer_by_lang, language);
 
   if (templateType === 'kostnadsforslag') {
     const amount = ticket.final_cost || '—';
     const messageBase =
       textTemplates.costProposal[language]?.(localizedTicket, amount) ||
       textTemplates.costProposal.sv(localizedTicket, amount);
-    const sms = await translateIfNeeded(messageBase, language);
+    let sms = await translateIfNeeded(messageBase, language);
     const template =
       emailTemplates.costProposal[language]?.(localizedTicket, amount) ||
       emailTemplates.costProposal.sv(localizedTicket, amount);
     const subject = await translateIfNeeded(template.subject, language);
-    const body = appendReplyGuidance(await translateIfNeeded(template.body, language), language);
+    let body = await translateIfNeeded(template.body, language);
+    body = appendUniqueBlock(body, await getLocalizedSetting(activeSettings.cost_prompt_by_lang, language));
+    body = appendUniqueBlock(body, emailFooter);
+    body = appendReplyGuidance(body, language);
+    sms = appendUniqueBlock(sms, smsFooter);
     return { subject, body, sms };
   }
 
   const messageBase =
     textTemplates.repairReady[language]?.(localizedTicket) ||
     textTemplates.repairReady.sv(localizedTicket);
-  const sms = await translateIfNeeded(messageBase, language);
+  let sms = await translateIfNeeded(messageBase, language);
   const template =
     emailTemplates.repairReady[language]?.(localizedTicket) ||
     emailTemplates.repairReady.sv(localizedTicket);
   const subject = await translateIfNeeded(template.subject, language);
-  const body = appendReplyGuidance(await translateIfNeeded(template.body, language), language);
+  let body = await translateIfNeeded(template.body, language);
+  body = appendUniqueBlock(body, await getLocalizedSetting(activeSettings.ready_prompt_by_lang, language));
+  body = appendUniqueBlock(body, emailFooter);
+  body = appendReplyGuidance(body, language);
+  sms = appendUniqueBlock(sms, smsFooter);
   return { subject, body, sms };
 };
 
@@ -1496,6 +1562,34 @@ app.post('/api/admin/test-email', requireAuth, requireRole('admin'), async (req,
   }
 });
 
+app.get('/api/admin/message-settings', requireAuth, requireRole('admin'), async (_req, res) => {
+  try {
+    const settings = await getAdminMessageSettings();
+    res.json(settings);
+  } catch (error) {
+    console.error('GET /api/admin/message-settings error:', error);
+    res.status(500).json({ error: 'Kunde inte hämta meddelandeinställningar.' });
+  }
+});
+
+app.put('/api/admin/message-settings', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const settings = mergeMessageSettings(req.body || {});
+    const { rows } = await query(
+      `INSERT INTO app_settings (key, value_json, updated_at)
+       VALUES ($1, $2::jsonb, NOW())
+       ON CONFLICT (key)
+       DO UPDATE SET value_json = EXCLUDED.value_json, updated_at = NOW()
+       RETURNING value_json`,
+      ['message_templates', JSON.stringify(settings)]
+    );
+    res.json(rows[0]?.value_json || settings);
+  } catch (error) {
+    console.error('PUT /api/admin/message-settings error:', error);
+    res.status(500).json({ error: 'Kunde inte spara meddelandeinställningar.' });
+  }
+});
+
 app.post('/api/preview-notification', requireAuth, requireRole('service'), async (req, res) => {
   try {
     const {
@@ -1518,6 +1612,7 @@ app.post('/api/preview-notification', requireAuth, requireRole('service'), async
     }
 
     const language = requestedLanguage || getLanguage(ticket);
+    const messageSettings = await getAdminMessageSettings();
     const previewTicket = {
       ...ticket,
       diagnosis: diagnosis ?? ticket.diagnosis,
@@ -1534,6 +1629,7 @@ app.post('/api/preview-notification', requireAuth, requireRole('service'), async
       templateType,
       ticket: localizedPreviewTicket,
       language,
+      settings: messageSettings,
     });
 
     return res.json({ ok: true, language, ...preview });
@@ -1558,16 +1654,16 @@ app.post('/api/notify/cost-proposal', requireAuth, requireRole('service'), async
       await query(`UPDATE service_tickets SET disclaimer_language = $1 WHERE id = $2`, [requestedLanguage, ticket.id]);
     }
     const localizedTicket = await localizeTicketFreeText(ticket, language);
-    const amount = ticket.final_cost || '—';
-    const messageBase =
-      textTemplates.costProposal[language]?.(localizedTicket, amount) ||
-      textTemplates.costProposal.sv(localizedTicket, amount);
-    const message = await translateIfNeeded(messageBase, language);
-    const template =
-      emailTemplates.costProposal[language]?.(localizedTicket, amount) ||
-      emailTemplates.costProposal.sv(localizedTicket, amount);
-    const translatedBody = appendReplyGuidance(await translateIfNeeded(template.body, language), language);
-    const translatedSubject = await translateIfNeeded(template.subject, language);
+    const messageSettings = await getAdminMessageSettings();
+    const preview = await buildNotificationPreview({
+      templateType: 'kostnadsforslag',
+      ticket: localizedTicket,
+      language,
+      settings: messageSettings,
+    });
+    const message = preview.sms;
+    const translatedBody = preview.body;
+    const translatedSubject = preview.subject;
     const delivery = { sms_sent: false, email_sent: false, warnings: [] };
     const sender = req.user?.email || 'okänd';
 
@@ -1727,13 +1823,16 @@ app.post('/api/notify/repair-ready', requireAuth, requireRole('service'), async 
       await query(`UPDATE service_tickets SET disclaimer_language = $1 WHERE id = $2`, [requestedLanguage, ticket.id]);
     }
     const localizedTicket = await localizeTicketFreeText(ticket, language);
-    const messageBase =
-      textTemplates.repairReady[language]?.(localizedTicket) || textTemplates.repairReady.sv(localizedTicket);
-    const message = await translateIfNeeded(messageBase, language);
-    const template =
-      emailTemplates.repairReady[language]?.(localizedTicket) || emailTemplates.repairReady.sv(localizedTicket);
-    const translatedBody = appendReplyGuidance(await translateIfNeeded(template.body, language), language);
-    const translatedSubject = await translateIfNeeded(template.subject, language);
+    const messageSettings = await getAdminMessageSettings();
+    const preview = await buildNotificationPreview({
+      templateType: 'reparationFardig',
+      ticket: localizedTicket,
+      language,
+      settings: messageSettings,
+    });
+    const message = preview.sms;
+    const translatedBody = preview.body;
+    const translatedSubject = preview.subject;
     const delivery = { sms_sent: false, email_sent: false, warnings: [] };
     const sender = req.user?.email || 'okänd';
 

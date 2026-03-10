@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -28,6 +29,13 @@ export function AdminPanel() {
   const [dateRange, setDateRange] = useState({ from: '', to: '' });
   const [testEmail, setTestEmail] = useState('');
   const [sendingTest, setSendingTest] = useState(false);
+  const [messageSettings, setMessageSettings] = useState({
+    email_footer_by_lang: { sv: '', en: '' },
+    sms_footer_by_lang: { sv: '', en: '' },
+    cost_prompt_by_lang: { sv: '', en: '' },
+    ready_prompt_by_lang: { sv: '', en: '' },
+  });
+  const [savingSettings, setSavingSettings] = useState(false);
   const [form, setForm] = useState({
     email: '',
     password: '',
@@ -75,6 +83,69 @@ export function AdminPanel() {
       setUsers(data || []);
     } catch (error) {
       console.error('Users fetch error:', error);
+    }
+  };
+
+  const loadMessageSettings = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/message-settings`, { headers });
+      if (!response.ok) throw new Error('Message settings error');
+      const data = await response.json();
+      setMessageSettings({
+        email_footer_by_lang: data?.email_footer_by_lang || { sv: '', en: '' },
+        sms_footer_by_lang: data?.sms_footer_by_lang || { sv: '', en: '' },
+        cost_prompt_by_lang: data?.cost_prompt_by_lang || { sv: '', en: '' },
+        ready_prompt_by_lang: data?.ready_prompt_by_lang || { sv: '', en: '' },
+      });
+    } catch (error) {
+      console.error('Message settings fetch error:', error);
+      toast({
+        title: 'Kunde inte hämta meddelandeinställningar',
+        description: 'Försök igen.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const updateSettingField = (group, lang, value) => {
+    setMessageSettings((prev) => ({
+      ...prev,
+      [group]: {
+        ...(prev[group] || {}),
+        [lang]: value,
+      },
+    }));
+  };
+
+  const saveMessageSettings = async () => {
+    setSavingSettings(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/message-settings`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(messageSettings),
+      });
+      if (!response.ok) throw new Error('Save message settings error');
+      const data = await response.json();
+      setMessageSettings({
+        email_footer_by_lang: data?.email_footer_by_lang || { sv: '', en: '' },
+        sms_footer_by_lang: data?.sms_footer_by_lang || { sv: '', en: '' },
+        cost_prompt_by_lang: data?.cost_prompt_by_lang || { sv: '', en: '' },
+        ready_prompt_by_lang: data?.ready_prompt_by_lang || { sv: '', en: '' },
+      });
+      toast({
+        title: 'Sparat',
+        description: 'Meddelandeinställningar uppdaterade.',
+      });
+    } catch (error) {
+      console.error('Save message settings error:', error);
+      toast({
+        title: 'Kunde inte spara',
+        description: 'Försök igen.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingSettings(false);
     }
   };
 
@@ -181,6 +252,7 @@ export function AdminPanel() {
     if (!canView) return;
     loadStats();
     loadUsers();
+    loadMessageSettings();
   }, [canView]);
 
   if (!canView) return null;
@@ -201,6 +273,7 @@ export function AdminPanel() {
         <TabsList className="bg-gray-100">
           <TabsTrigger value="reports">Rapporter</TabsTrigger>
           <TabsTrigger value="users">Användare</TabsTrigger>
+          <TabsTrigger value="messages">Meddelanden</TabsTrigger>
         </TabsList>
 
         <TabsContent value="reports" className="mt-6">
@@ -257,6 +330,80 @@ export function AdminPanel() {
                 Kör filter
               </Button>
             </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="messages" className="mt-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800 mb-3">E-postfooter</h3>
+                <Label className="mb-2 block">Svenska</Label>
+                <Textarea
+                  value={messageSettings.email_footer_by_lang?.sv || ''}
+                  onChange={(event) => updateSettingField('email_footer_by_lang', 'sv', event.target.value)}
+                  className="mb-3 min-h-[90px]"
+                />
+                <Label className="mb-2 block">English</Label>
+                <Textarea
+                  value={messageSettings.email_footer_by_lang?.en || ''}
+                  onChange={(event) => updateSettingField('email_footer_by_lang', 'en', event.target.value)}
+                  className="min-h-[90px]"
+                />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800 mb-3">SMS-footer</h3>
+                <Label className="mb-2 block">Svenska</Label>
+                <Input
+                  value={messageSettings.sms_footer_by_lang?.sv || ''}
+                  onChange={(event) => updateSettingField('sms_footer_by_lang', 'sv', event.target.value)}
+                  className="mb-3"
+                />
+                <Label className="mb-2 block">English</Label>
+                <Input
+                  value={messageSettings.sms_footer_by_lang?.en || ''}
+                  onChange={(event) => updateSettingField('sms_footer_by_lang', 'en', event.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800 mb-3">Prompt: Kostnadsförslag</h3>
+                <Label className="mb-2 block">Svenska</Label>
+                <Textarea
+                  value={messageSettings.cost_prompt_by_lang?.sv || ''}
+                  onChange={(event) => updateSettingField('cost_prompt_by_lang', 'sv', event.target.value)}
+                  className="mb-3 min-h-[90px]"
+                />
+                <Label className="mb-2 block">English</Label>
+                <Textarea
+                  value={messageSettings.cost_prompt_by_lang?.en || ''}
+                  onChange={(event) => updateSettingField('cost_prompt_by_lang', 'en', event.target.value)}
+                  className="min-h-[90px]"
+                />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800 mb-3">Prompt: Reparation klar</h3>
+                <Label className="mb-2 block">Svenska</Label>
+                <Textarea
+                  value={messageSettings.ready_prompt_by_lang?.sv || ''}
+                  onChange={(event) => updateSettingField('ready_prompt_by_lang', 'sv', event.target.value)}
+                  className="mb-3 min-h-[90px]"
+                />
+                <Label className="mb-2 block">English</Label>
+                <Textarea
+                  value={messageSettings.ready_prompt_by_lang?.en || ''}
+                  onChange={(event) => updateSettingField('ready_prompt_by_lang', 'en', event.target.value)}
+                  className="min-h-[90px]"
+                />
+              </div>
+            </div>
+          </div>
+          <div className="mt-6">
+            <Button onClick={saveMessageSettings} disabled={savingSettings}>
+              {savingSettings ? 'Sparar...' : 'Spara meddelandeinställningar'}
+            </Button>
           </div>
         </TabsContent>
 
