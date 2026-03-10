@@ -229,6 +229,8 @@ const mailer = SMTP_HOST
   : null;
 
 const sendEmail = async ({ to, subject, body }) => {
+  let smtpError = null;
+
   if (mailer) {
     try {
       const result = await mailer.sendMail({
@@ -243,7 +245,7 @@ const sendEmail = async ({ to, subject, body }) => {
       const smtpTarget = `${SMTP_HOST}:${SMTP_PORT}`;
       const reason = error?.message || 'Unknown SMTP error';
       const code = error?.code ? ` (${error.code})` : '';
-      throw new Error(`SMTP ${smtpTarget} failed${code}: ${reason}`);
+      smtpError = `SMTP ${smtpTarget} failed${code}: ${reason}`;
     }
   }
 
@@ -271,8 +273,15 @@ const sendEmail = async ({ to, subject, body }) => {
       return;
     } catch (error) {
       const reason = error?.message || 'Unknown Resend error';
+      if (smtpError) {
+        throw new Error(`${smtpError} | Resend API failed: ${reason}`);
+      }
       throw new Error(`Resend API failed: ${reason}`);
     }
+  }
+
+  if (smtpError) {
+    throw new Error(smtpError);
   }
 
   throw new Error('Email is not configured');
