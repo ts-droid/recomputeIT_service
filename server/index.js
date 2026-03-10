@@ -232,6 +232,40 @@ const extractTicketNumber = (subject = '', text = '') => {
   return null;
 };
 
+const sendDecisionAcknowledgement = async ({ ticket, decision, channel, smsTo, emailTo }) => {
+  const lang = getLanguage(ticket);
+  const langKey = decisionAckTemplates[decision]?.sms?.[lang] ? lang : 'sv';
+
+  if (channel === 'sms' && smsTo) {
+    const smsBody = decisionAckTemplates[decision]?.sms?.[langKey];
+    if (smsBody) {
+      await sendSms({ to: smsTo, message: smsBody });
+      await query(
+        `INSERT INTO message_logs (ticket_id, channel, direction, to_number, body, provider)
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [ticket.id, 'sms', 'outbound', smsTo, smsBody, '46elks']
+      );
+    }
+    return;
+  }
+
+  if (channel === 'email' && emailTo) {
+    const emailTemplate = decisionAckTemplates[decision]?.email?.[langKey];
+    if (emailTemplate) {
+      await sendEmail({
+        to: emailTo,
+        subject: emailTemplate.subject,
+        body: emailTemplate.body,
+      });
+      await query(
+        `INSERT INTO message_logs (ticket_id, channel, direction, to_number, subject, body, provider)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [ticket.id, 'email', 'outbound', emailTo, emailTemplate.subject, emailTemplate.body, 'smtp']
+      );
+    }
+  }
+};
+
 const loadResendReceivedEmail = async (emailId) => {
   if (!RESEND_API_KEY || !emailId) return null;
   const response = await fetch(`https://api.resend.com/emails/receiving/${emailId}`, {
@@ -284,6 +318,41 @@ const emailTemplates = {
       subject: `Your device is ready (#${ticket.ticket_number})`,
       body: `Hi ${ticket.customer_name},\n\nYour device is ready for pickup. Welcome in!\n\nBest regards\nre:Compute-IT`,
     }),
+  },
+};
+
+const decisionAckTemplates = {
+  yes: {
+    sms: {
+      sv: 'Tack för förtroendet. Vi återkommer så snart reparationen är klar.',
+      en: 'Thanks for your approval. We will contact you as soon as the repair is complete.',
+    },
+    email: {
+      sv: {
+        subject: 'Tack för ditt godkännande',
+        body: 'Tack för förtroendet. Vi återkommer så snart reparationen är klar.',
+      },
+      en: {
+        subject: 'Thank you for your approval',
+        body: 'Thanks for your approval. We will contact you as soon as the repair is complete.',
+      },
+    },
+  },
+  no: {
+    sms: {
+      sv: 'Tråkigt att höra. Har du frågor, kontakta oss på kontakt@recompute.it eller 016-5416700. Vi förbehåller oss rätten att kassera din inlämnade produkt om den inte upphämtas inom 7 dagar från nekat kostnadsförslag.',
+      en: 'Sorry to hear that. Questions? Contact us at kontakt@recompute.it or 016-5416700. We reserve the right to discard uncollected products 7 days after a declined quote.',
+    },
+    email: {
+      sv: {
+        subject: 'Information om nekat kostnadsförslag',
+        body: 'Tråkigt att höra.\n\nHar du frågor kan du kontakta oss på kontakt@recompute.it eller 016-5416700.\n\nVi förbehåller oss rätten att kassera din inlämnade produkt om den inte upphämtas inom 7 dagar från nekat kostnadsförslag.',
+      },
+      en: {
+        subject: 'Information about declined quote',
+        body: 'Sorry to hear that.\n\nIf you have questions, contact us at kontakt@recompute.it or 016-5416700.\n\nWe reserve the right to discard uncollected products 7 days after a declined quote.',
+      },
+    },
   },
 };
 
@@ -1102,6 +1171,16 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
          WHERE id = $2`,
         ['Kostnadsförslag godkänt', ticket.id]
       );
+      try {
+        await sendDecisionAcknowledgement({
+          ticket,
+          decision: 'yes',
+          channel: 'sms',
+          smsTo: from,
+        });
+      } catch (error) {
+        console.error('SMS acknowledgement send failed (yes):', error);
+      }
     } else if (decision === 'no') {
       await query(
         `UPDATE service_tickets
@@ -1109,6 +1188,16 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
          WHERE id = $2`,
         ['Kostnadsförslag nekat', ticket.id]
       );
+      try {
+        await sendDecisionAcknowledgement({
+          ticket,
+          decision: 'no',
+          channel: 'sms',
+          smsTo: from,
+        });
+      } catch (error) {
+        console.error('SMS acknowledgement send failed (no):', error);
+      }
     }
 
     return res.json({ ok: true, matched: true, ticket_number: ticket.ticket_number, decision });
@@ -1161,6 +1250,16 @@ app.post('/api/webhooks/46elks', async (req, res) => {
          WHERE id = $2`,
         ['Kostnadsförslag godkänt', ticket.id]
       );
+      try {
+        await sendDecisionAcknowledgement({
+          ticket,
+          decision: 'yes',
+          channel: 'email',
+          emailTo: inbound.from,
+        });
+      } catch (error) {
+        console.error('Email acknowledgement send failed (yes):', error);
+      }
     } else if (decision === 'no') {
       await query(
         `UPDATE service_tickets
@@ -1168,6 +1267,16 @@ app.post('/api/webhooks/46elks', async (req, res) => {
          WHERE id = $2`,
         ['Kostnadsförslag nekat', ticket.id]
       );
+      try {
+        await sendDecisionAcknowledgement({
+          ticket,
+          decision: 'no',
+          channel: 'email',
+          emailTo: inbound.from,
+        });
+      } catch (error) {
+        console.error('Email acknowledgement send failed (no):', error);
+      }
     }
 
     return res.json({ ok: true });

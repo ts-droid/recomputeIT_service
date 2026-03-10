@@ -18,6 +18,7 @@ const translations = {
 • Vi rekommenderar starkt att du tar backup av all viktig data
 • Reparationstid kan variera beroende på fel och reservdelstillgång
 • Du godkänner att vi kan behöva återställa enheten till fabriksinställningar
+• Vid nekat kostnadsförslag ska enheten hämtas inom 7 dagar, annars kan den kasseras
 
 Genom att acceptera dessa villkor bekräftar du att du förstår och godkänner ovanstående.`,
     acceptLabel: 'Jag har läst och godkänner villkoren',
@@ -36,6 +37,7 @@ Genom att acceptera dessa villkor bekräftar du att du förstår och godkänner 
 • We strongly recommend backing up all important data
 • Repair time may vary depending on the fault and parts availability
 • You agree that we may need to reset the device to factory settings
+• If a cost proposal is declined, the device must be collected within 7 days, otherwise it may be discarded
 
 By accepting these terms, you confirm that you understand and agree to the above.`,
     acceptLabel: 'I have read and accept the terms',
