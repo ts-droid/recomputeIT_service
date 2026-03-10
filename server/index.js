@@ -612,35 +612,62 @@ const sendDecisionClarification = async ({ ticket, channel, smsTo, emailTo }) =>
 
 const loadResendReceivedEmail = async (emailId) => {
   if (!RESEND_API_KEY || !emailId) return null;
+  const errors = [];
+
   if (resendClient?.emails?.receiving?.get) {
-    const receivingResult = await resendClient.emails.receiving.get(emailId);
-    if (receivingResult?.error) {
-      throw new Error(`Resend receiving get failed: ${receivingResult.error.message || 'unknown error'}`);
+    try {
+      const receivingResult = await resendClient.emails.receiving.get(emailId);
+      if (receivingResult?.data) return receivingResult.data;
+      if (receivingResult?.error) {
+        errors.push(`receiving.get: ${receivingResult.error.message || 'unknown error'}`);
+      }
+    } catch (error) {
+      errors.push(`receiving.get: ${error?.message || 'unknown error'}`);
     }
-    return receivingResult?.data || null;
   }
 
   if (resendClient?.emails?.get) {
-    const getResult = await resendClient.emails.get(emailId);
-    if (getResult?.error) {
-      throw new Error(`Resend emails.get failed: ${getResult.error.message || 'unknown error'}`);
+    try {
+      const getResult = await resendClient.emails.get(emailId);
+      if (getResult?.data) return getResult.data;
+      if (getResult?.error) {
+        errors.push(`emails.get: ${getResult.error.message || 'unknown error'}`);
+      }
+    } catch (error) {
+      errors.push(`emails.get: ${error?.message || 'unknown error'}`);
     }
-    return getResult?.data || null;
   }
 
-  const response = await fetch(`https://api.resend.com/emails/receiving/${encodeURIComponent(emailId)}`, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-  });
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Resend receiving REST failed (${response.status}): ${errorText}`);
+  const restPaths = [
+    `https://api.resend.com/emails/receiving/${encodeURIComponent(emailId)}`,
+    `https://api.resend.com/emails/${encodeURIComponent(emailId)}`,
+  ];
+
+  for (const url of restPaths) {
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        errors.push(`rest ${url}: ${response.status} ${errorText}`);
+        continue;
+      }
+
+      const payload = await response.json();
+      const data = payload?.data || payload || null;
+      if (data) return data;
+    } catch (error) {
+      errors.push(`rest ${url}: ${error?.message || 'unknown error'}`);
+    }
   }
-  const payload = await response.json();
-  return payload?.data || payload || null;
+
+  throw new Error(`Resend inbound fetch failed (${emailId}): ${errors.join(' | ')}`);
 };
 
 const textTemplates = {
@@ -1877,24 +1904,24 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
 
     const inbound = parseInboundEmailPayload(parsedPayload);
     if (inbound.provider === 'resend' && !inbound.text && inbound.emailId) {
-      for (let attempt = 1; attempt <= 3 && !inbound.text; attempt += 1) {
+      for (let attempt = 1; attempt <= 6 && !inbound.text; attempt += 1) {
         try {
           const received = await loadResendReceivedEmail(inbound.emailId);
           inbound.text = extractInboundText(received) || inbound.text;
-          if (!inbound.text && attempt < 3) {
-            await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
+          if (!inbound.text && attempt < 6) {
+            await new Promise((resolve) => setTimeout(resolve, 600 * attempt));
           }
-          if (!inbound.text && attempt === 3) {
+          if (!inbound.text && attempt === 6) {
             console.warn('Resend inbound email has no extractable text body', {
               emailId: inbound.emailId,
               receivedKeys: received ? Object.keys(received) : [],
             });
           }
         } catch (error) {
-          if (attempt === 3) {
+          if (attempt === 6) {
             console.error('Resend receiving fetch failed:', error);
           } else {
-            await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
+            await new Promise((resolve) => setTimeout(resolve, 600 * attempt));
           }
         }
       }
