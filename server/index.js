@@ -314,8 +314,17 @@ app.post('/api/tickets', requireAuth, async (req, res) => {
       user_id,
     } = req.body || {};
 
-    if (!customer_name || !customer_phone || !device_type || !issue_description) {
-      return res.status(400).json({ error: 'Saknar obligatoriska fält.' });
+    const missingFields = [];
+    if (!customer_name?.toString().trim()) missingFields.push('customer_name');
+    if (!customer_phone?.toString().trim()) missingFields.push('customer_phone');
+    if (!device_type?.toString().trim()) missingFields.push('device_type');
+    if (!issue_description?.toString().trim()) missingFields.push('issue_description');
+
+    if (missingFields.length > 0) {
+      return res.status(400).json({
+        error: 'Saknar obligatoriska fält.',
+        details: `Missing required fields: ${missingFields.join(', ')}`,
+      });
     }
 
     const normalizedPhone = normalizePhone(customer_phone);
