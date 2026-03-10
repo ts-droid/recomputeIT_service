@@ -1069,13 +1069,16 @@ app.get('/api/tickets/:id/messages', requireAuth, async (req, res) => {
 app.post('/api/tickets/:id/messages', requireAuth, requireRole('service'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { subject, body, channel = 'email' } = req.body || {};
+    const { subject, body, message, text, channel = 'email' } = req.body || {};
     const sender = req.user?.email || 'okänd';
 
     if (channel !== 'email') {
       return res.status(400).json({ error: 'Endast e-post stöds för manuell konversation just nu.' });
     }
-    if (!body?.toString().trim()) {
+    const rawBodyInput = [body, message, text].find(
+      (value) => value !== undefined && value !== null && value.toString().trim()
+    );
+    if (!rawBodyInput?.toString().trim()) {
       return res.status(400).json({ error: 'Meddelandetext saknas.' });
     }
 
@@ -1089,13 +1092,18 @@ app.post('/api/tickets/:id/messages', requireAuth, requireRole('service'), async
     }
 
     const baseSubject = subject?.toString().trim() || `Re: Ärende #${ticket.ticket_number}`;
-    const baseBody = body.toString().trim();
+    const baseBody = rawBodyInput.toString().trim();
     const language = getLanguage(ticket);
 
-    const [resolvedSubject, resolvedBody] = await Promise.all([
+    const [translatedSubject, translatedBody] = await Promise.all([
       translateIfNeeded(baseSubject, language, { allowEnglish: true }),
       translateIfNeeded(baseBody, language, { allowEnglish: true }),
     ]);
+    const resolvedSubject = translatedSubject?.toString().trim() || baseSubject;
+    const resolvedBody = translatedBody?.toString().trim() || baseBody;
+    if (!resolvedBody) {
+      return res.status(400).json({ error: 'Meddelandetext saknas efter översättning.' });
+    }
 
     await sendEmail({
       to: ticket.customer_email,
