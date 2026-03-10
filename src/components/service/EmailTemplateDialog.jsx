@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
 import { generateEmailContent } from '@/lib/emailTemplates';
-import { Copy, Check, Send, Globe, Sparkles, Mail, MessageSquare } from 'lucide-react';
+import { Copy, Check, Send, Globe, Sparkles, Mail } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { useSupabaseAuth } from '@/contexts/SupabaseAuthContext';
@@ -149,9 +149,13 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
       const sentSms = Boolean(result?.sms_sent);
       const sentEmail = Boolean(result?.email_sent);
 
-      let description = channel === 'sms' ? "SMS skickat till kunden." : "E-post skickad till kunden.";
-      if (channel === 'sms' && sentSms && sentEmail) {
+      let description = "Skickat till kunden.";
+      if (sentSms && sentEmail) {
         description = 'SMS och e-post skickades till kunden.';
+      } else if (sentSms) {
+        description = 'SMS skickades till kunden.';
+      } else if (sentEmail) {
+        description = 'E-post skickades till kunden.';
       }
       if (warningText) {
         description = `${description} ${warningText}`.trim();
@@ -267,7 +271,7 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
         ) : (
           <div className="my-4">
             <p className="text-sm text-gray-600">
-              Meddelandet skickas på kundens valda språk när du väljer e-post eller SMS.
+              Meddelandet skickas på kundens valda språk till alla tillgängliga kontaktvägar (SMS/e-post).
             </p>
           </div>
         )}
@@ -292,13 +296,13 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
             <Send className="mr-2 h-4 w-4" />
             Godkänn & Kopiera
           </Button>
-          <Button onClick={() => sendNotification('email')} className="bg-slate-800 hover:bg-slate-900" disabled={isSending}>
+          <Button
+            onClick={() => sendNotification('auto')}
+            className="bg-slate-800 hover:bg-slate-900"
+            disabled={isSending || (!ticket?.customer_phone && !ticket?.customer_email)}
+          >
             <Mail className="mr-2 h-4 w-4" />
-            Skicka e-post
-          </Button>
-          <Button onClick={() => sendNotification('sms')} variant="outline" disabled={isSending}>
-            <MessageSquare className="mr-2 h-4 w-4" />
-            Skicka SMS
+            Skicka till kund
           </Button>
         </DialogFooter>
       </DialogContent>

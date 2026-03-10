@@ -697,6 +697,50 @@ app.post('/api/notify/cost-proposal', requireAuth, requireRole('service'), async
           details: delivery.warnings.join(' ') || 'Både SMS och e-post misslyckades.',
         });
       }
+    } else if (channel === 'auto') {
+      if (!ticket.customer_phone && !ticket.customer_email) {
+        return res.status(400).json({ error: 'Varken telefonnummer eller e-post finns registrerat.' });
+      }
+
+      if (ticket.customer_phone) {
+        try {
+          const smsResponse = await sendSms({
+            to: ticket.customer_phone,
+            message,
+          });
+          await query(
+            `INSERT INTO message_logs (ticket_id, channel, direction, to_number, body, provider, provider_id)
+             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+            [ticket.id, 'sms', 'outbound', ticket.customer_phone, message, '46elks', smsResponse?.id || null]
+          );
+          delivery.sms_sent = true;
+        } catch (error) {
+          console.error('SMS send failed (cost-proposal/auto):', error);
+          delivery.warnings.push('SMS kunde inte skickas.');
+        }
+      }
+
+      if (ticket.customer_email) {
+        try {
+          await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody });
+          await query(
+            `INSERT INTO message_logs (ticket_id, channel, direction, to_number, subject, body, provider)
+             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+            [ticket.id, 'email', 'outbound', ticket.customer_email, translatedSubject, translatedBody, 'smtp']
+          );
+          delivery.email_sent = true;
+        } catch (error) {
+          console.error('Email send failed (cost-proposal/auto):', error);
+          delivery.warnings.push('E-post kunde inte skickas.');
+        }
+      }
+
+      if (!delivery.sms_sent && !delivery.email_sent) {
+        return res.status(500).json({
+          error: 'Kunde inte skicka.',
+          details: delivery.warnings.join(' ') || 'Både SMS och e-post misslyckades.',
+        });
+      }
     } else {
       if (!ticket.customer_email) {
         return res.status(400).json({ error: 'E-post saknas.' });
@@ -771,6 +815,50 @@ app.post('/api/notify/repair-ready', requireAuth, requireRole('service'), async 
         } catch (error) {
           console.error('Auto email after sms (repair-ready) failed:', error);
           delivery.warnings.push(delivery.sms_sent ? 'SMS skickades, men e-post kunde inte skickas.' : 'E-post kunde inte skickas.');
+        }
+      }
+
+      if (!delivery.sms_sent && !delivery.email_sent) {
+        return res.status(500).json({
+          error: 'Kunde inte skicka.',
+          details: delivery.warnings.join(' ') || 'Både SMS och e-post misslyckades.',
+        });
+      }
+    } else if (channel === 'auto') {
+      if (!ticket.customer_phone && !ticket.customer_email) {
+        return res.status(400).json({ error: 'Varken telefonnummer eller e-post finns registrerat.' });
+      }
+
+      if (ticket.customer_phone) {
+        try {
+          const smsResponse = await sendSms({
+            to: ticket.customer_phone,
+            message,
+          });
+          await query(
+            `INSERT INTO message_logs (ticket_id, channel, direction, to_number, body, provider, provider_id)
+             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+            [ticket.id, 'sms', 'outbound', ticket.customer_phone, message, '46elks', smsResponse?.id || null]
+          );
+          delivery.sms_sent = true;
+        } catch (error) {
+          console.error('SMS send failed (repair-ready/auto):', error);
+          delivery.warnings.push('SMS kunde inte skickas.');
+        }
+      }
+
+      if (ticket.customer_email) {
+        try {
+          await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody });
+          await query(
+            `INSERT INTO message_logs (ticket_id, channel, direction, to_number, subject, body, provider)
+             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+            [ticket.id, 'email', 'outbound', ticket.customer_email, translatedSubject, translatedBody, 'smtp']
+          );
+          delivery.email_sent = true;
+        } catch (error) {
+          console.error('Email send failed (repair-ready/auto):', error);
+          delivery.warnings.push('E-post kunde inte skickas.');
         }
       }
 
