@@ -131,6 +131,25 @@ const toSmsNumber = (phone) => {
 
 const getLanguage = (ticket) => ticket?.disclaimer_language || 'sv';
 
+const parseApprovalDecision = (rawMessage = '') => {
+  const normalized = rawMessage
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!normalized) return null;
+
+  const yesTokens = ['ja', 'yes', 'ok', 'okej', 'godkann', 'approve', 'approved', 'y'];
+  const noTokens = ['nej', 'no', 'avböj', 'avboj', 'decline', 'n'];
+
+  const words = normalized.split(' ');
+  if (words.some((word) => yesTokens.includes(word))) return 'yes';
+  if (words.some((word) => noTokens.includes(word))) return 'no';
+  return null;
+};
+
 const textTemplates = {
   costProposal: {
     sv: (ticket, amount) =>
@@ -944,15 +963,15 @@ app.post('/api/webhooks/46elks', async (req, res) => {
       [ticket.id, 'sms', 'inbound', from, message, '46elks']
     );
 
-    const normalizedMessage = message.toLowerCase();
-    if (['ja', 'yes', 'j', 'y'].includes(normalizedMessage)) {
+    const decision = parseApprovalDecision(message);
+    if (decision === 'yes') {
       await query(
         `UPDATE service_tickets
          SET cost_proposal_approved = true, status = $1
          WHERE id = $2`,
         ['Kostnadsförslag godkänt', ticket.id]
       );
-    } else if (['nej', 'no', 'n'].includes(normalizedMessage)) {
+    } else if (decision === 'no') {
       await query(
         `UPDATE service_tickets
          SET cost_proposal_approved = false, status = $1
