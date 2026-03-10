@@ -354,8 +354,16 @@ app.post('/api/tickets', requireAuth, async (req, res) => {
 
     res.status(201).json(rows[0]);
   } catch (error) {
-    console.error('POST /api/tickets error:', error);
-    res.status(500).json({ error: 'Kunde inte skapa ärende.' });
+    console.error('POST /api/tickets error:', {
+      message: error?.message,
+      code: error?.code,
+      detail: error?.detail,
+      constraint: error?.constraint,
+    });
+    res.status(500).json({
+      error: 'Kunde inte skapa ärende.',
+      details: error?.message || 'Okänt fel',
+    });
   }
 });
 

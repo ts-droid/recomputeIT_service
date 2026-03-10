@@ -129,7 +129,7 @@ export default function PublicRegistrationPage() {
       });
 
       if (!newTicket) {
-        throw new Error('Kunde inte skapa ärende');
+        return;
       }
       
       downloadServiceTicketPdf(newTicket, lang);
@@ -150,7 +150,7 @@ export default function PublicRegistrationPage() {
       console.error('Error submitting service ticket:', error);
       toast({
         title: t.toast.errorTitle,
-        description: t.toast.errorDescription,
+        description: error?.message || t.toast.errorDescription,
         variant: 'destructive',
       });
     } finally {

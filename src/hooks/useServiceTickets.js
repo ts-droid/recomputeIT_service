@@ -14,8 +14,18 @@ const apiFetch = async (path, options) => {
   });
 
   if (!response.ok) {
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const payload = await response.json().catch(() => ({}));
+      const message =
+        payload?.details ||
+        payload?.error ||
+        `Request failed (${response.status})`;
+      throw new Error(message);
+    }
+
     const message = await response.text();
-    throw new Error(message || 'Request failed');
+    throw new Error(message || `Request failed (${response.status})`);
   }
 
   return response.json();
@@ -87,7 +97,7 @@ export const useServiceTickets = () => {
       console.error("Error adding ticket:", error);
       toast({
         title: "Kunde inte skapa ärende",
-        description: "Ett fel uppstod. Försök igen.",
+        description: error?.message || "Ett fel uppstod. Försök igen.",
         variant: "destructive",
       });
       return null;
