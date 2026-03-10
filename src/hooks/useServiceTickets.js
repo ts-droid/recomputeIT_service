@@ -5,12 +5,14 @@ import { useToast } from '@/components/ui/use-toast';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 const apiFetch = async (path, options) => {
+  const mergedHeaders = {
+    'Content-Type': 'application/json',
+    ...(options?.headers || {}),
+  };
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options?.headers || {}),
-    },
     ...options,
+    headers: mergedHeaders,
   });
 
   if (!response.ok) {
