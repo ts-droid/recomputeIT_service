@@ -38,6 +38,8 @@ const ELKS_API_PASSWORD = process.env.ELKS_API_PASSWORD || '';
 const ELKS_SMS_FROM = process.env.ELKS_SMS_FROM || '';
 const ELKS_WEBHOOK_SECRET = process.env.ELKS_WEBHOOK_SECRET || '';
 const SMS_DEFAULT_COUNTRY_CODE = process.env.SMS_DEFAULT_COUNTRY_CODE || '+46';
+const EMAIL_WEBHOOK_SECRET = process.env.EMAIL_WEBHOOK_SECRET || '';
+const EMAIL_INBOUND_PROVIDER = (process.env.EMAIL_INBOUND_PROVIDER || 'auto').toLowerCase();
 
 const SMTP_HOST = process.env.SMTP_HOST || '';
 const SMTP_PORT = Number(process.env.SMTP_PORT || 587);
@@ -147,6 +149,84 @@ const parseApprovalDecision = (rawMessage = '') => {
   const words = normalized.split(' ');
   if (words.some((word) => yesTokens.includes(word))) return 'yes';
   if (words.some((word) => noTokens.includes(word))) return 'no';
+  return null;
+};
+
+const readPath = (obj, path) =>
+  path.split('.').reduce((acc, key) => (acc && acc[key] !== undefined ? acc[key] : undefined), obj);
+
+const firstString = (obj, paths) => {
+  for (const path of paths) {
+    const value = readPath(obj, path);
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return '';
+};
+
+const extractEmailAddress = (raw = '') => {
+  if (!raw) return '';
+  const match = raw.match(/<([^>]+)>/);
+  const candidate = match ? match[1] : raw;
+  return candidate.trim().toLowerCase();
+};
+
+const inferInboundProvider = (body) => {
+  if (EMAIL_INBOUND_PROVIDER !== 'auto') return EMAIL_INBOUND_PROVIDER;
+  if (body?.type?.toString().toLowerCase().includes('email') || body?.data?.from) return 'resend';
+  if (body?.message?.payload || body?.gmail || body?.historyId) return 'gmail';
+  return 'unknown';
+};
+
+const parseInboundEmailPayload = (body) => {
+  const provider = inferInboundProvider(body);
+  const fromRaw = firstString(body, [
+    'data.from',
+    'from',
+    'sender',
+    'message.from',
+    'gmail.from',
+  ]);
+  const subject = firstString(body, [
+    'data.subject',
+    'subject',
+    'message.subject',
+    'gmail.subject',
+  ]);
+  const text = firstString(body, [
+    'data.text',
+    'text',
+    'body',
+    'message.text',
+    'gmail.text',
+    'plain',
+  ]);
+  const to = firstString(body, [
+    'data.to',
+    'to',
+    'message.to',
+    'gmail.to',
+  ]);
+
+  return {
+    provider,
+    from: extractEmailAddress(fromRaw),
+    to,
+    subject,
+    text,
+  };
+};
+
+const extractTicketNumber = (subject = '', text = '') => {
+  const content = `${subject}\n${text}`;
+  const patterns = [
+    /(?:ärende|arende|case)\s*#?\s*(\d{4,})/i,
+    /#\s*(\d{4,})/,
+    /\b(\d{4,})\b/,
+  ];
+  for (const pattern of patterns) {
+    const match = content.match(pattern);
+    if (match?.[1]) return Number(match[1]);
+  }
   return null;
 };
 
@@ -925,6 +1005,85 @@ app.post('/api/notify/repair-ready', requireAuth, requireRole('service'), async 
   } catch (error) {
     console.error('POST /api/notify/repair-ready error:', error);
     res.status(500).json({ error: 'Kunde inte skicka.' });
+  }
+});
+
+app.post('/api/webhooks/email-inbound', async (req, res) => {
+  try {
+    if (EMAIL_WEBHOOK_SECRET) {
+      const providedSecret =
+        req.query.secret ||
+        req.headers['x-webhook-secret'] ||
+        req.headers['x-inbound-secret'] ||
+        '';
+      if (providedSecret !== EMAIL_WEBHOOK_SECRET) {
+        return res.status(401).json({ error: 'Invalid webhook secret' });
+      }
+    }
+
+    const inbound = parseInboundEmailPayload(req.body || {});
+    if (!inbound.from || (!inbound.subject && !inbound.text)) {
+      return res.status(400).json({ error: 'Invalid inbound email payload' });
+    }
+
+    const ticketNumber = extractTicketNumber(inbound.subject, inbound.text);
+    let ticket = null;
+
+    if (ticketNumber) {
+      const byTicket = await query(
+        `SELECT * FROM service_tickets WHERE ticket_number = $1 ORDER BY created_at DESC LIMIT 1`,
+        [ticketNumber]
+      );
+      ticket = byTicket.rows[0] || null;
+    }
+
+    if (!ticket) {
+      const byEmail = await query(
+        `SELECT * FROM service_tickets
+         WHERE LOWER(customer_email) = LOWER($1)
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [inbound.from]
+      );
+      ticket = byEmail.rows[0] || null;
+    }
+
+    if (!ticket) {
+      await query(
+        `INSERT INTO message_logs (channel, direction, from_number, to_number, subject, body, provider)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        ['email', 'inbound', inbound.from, inbound.to || null, inbound.subject || null, inbound.text || null, inbound.provider]
+      );
+      return res.json({ ok: true, matched: false });
+    }
+
+    await query(
+      `INSERT INTO message_logs (ticket_id, channel, direction, from_number, to_number, subject, body, provider)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [ticket.id, 'email', 'inbound', inbound.from, inbound.to || null, inbound.subject || null, inbound.text || null, inbound.provider]
+    );
+
+    const decision = parseApprovalDecision(`${inbound.subject}\n${inbound.text}`);
+    if (decision === 'yes') {
+      await query(
+        `UPDATE service_tickets
+         SET cost_proposal_approved = true, status = $1
+         WHERE id = $2`,
+        ['Kostnadsförslag godkänt', ticket.id]
+      );
+    } else if (decision === 'no') {
+      await query(
+        `UPDATE service_tickets
+         SET cost_proposal_approved = false, status = $1
+         WHERE id = $2`,
+        ['Kostnadsförslag nekat', ticket.id]
+      );
+    }
+
+    return res.json({ ok: true, matched: true, ticket_number: ticket.ticket_number, decision });
+  } catch (error) {
+    console.error('Email inbound webhook error:', error);
+    return res.status(500).json({ error: 'Webhook error' });
   }
 });
 
