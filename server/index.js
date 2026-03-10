@@ -226,6 +226,17 @@ const mailer = SMTP_HOST
   : null;
 
 const sendEmail = async ({ to, subject, body }) => {
+  if (mailer) {
+    const result = await mailer.sendMail({
+      from: SMTP_FROM || SMTP_USER,
+      to,
+      subject,
+      text: body,
+    });
+
+    return result;
+  }
+
   if (RESEND_API_KEY && RESEND_FROM) {
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -249,18 +260,7 @@ const sendEmail = async ({ to, subject, body }) => {
     return;
   }
 
-  if (!mailer) {
-    throw new Error('Email is not configured');
-  }
-
-  const result = await mailer.sendMail({
-    from: SMTP_FROM || SMTP_USER,
-    to,
-    subject,
-    text: body,
-  });
-
-  return result;
+  throw new Error('Email is not configured');
 };
 
 app.get('/api/tickets', requireAuth, async (_req, res) => {
@@ -566,7 +566,10 @@ app.post('/api/admin/test-email', requireAuth, requireRole('admin'), async (req,
     res.json({ ok: true });
   } catch (error) {
     console.error('POST /api/admin/test-email error:', error);
-    res.status(500).json({ error: 'Kunde inte skicka testmail.' });
+    res.status(500).json({
+      error: 'Kunde inte skicka testmail.',
+      details: error?.message || 'Okänt fel',
+    });
   }
 });
 
