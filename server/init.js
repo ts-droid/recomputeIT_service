@@ -49,6 +49,7 @@ export async function initDb() {
       ticket_id UUID REFERENCES service_tickets(id) ON DELETE SET NULL,
       channel TEXT NOT NULL,
       direction TEXT NOT NULL,
+      sender_user TEXT,
       to_number TEXT,
       from_number TEXT,
       subject TEXT,
@@ -58,6 +59,7 @@ export async function initDb() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`
   );
+  await query(`ALTER TABLE message_logs ADD COLUMN IF NOT EXISTS sender_user TEXT`);
 
   const adminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL;
   const adminPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD;

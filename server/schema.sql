@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS message_logs (
   ticket_id UUID REFERENCES service_tickets(id) ON DELETE SET NULL,
   channel TEXT NOT NULL,
   direction TEXT NOT NULL,
+  sender_user TEXT,
   to_number TEXT,
   from_number TEXT,
   subject TEXT,

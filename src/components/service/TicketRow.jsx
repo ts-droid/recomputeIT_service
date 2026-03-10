@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, ChevronDown, ChevronRight, User, Smartphone, Mail, Phone, Calendar, Languages, Edit2, ShieldCheck, PenLine as FilePenLine, Wrench, DollarSign, Printer, Sparkles, EyeOff, Eye, MessageSquare, Send } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -49,7 +49,7 @@ const channelLabel = (channel) => {
 };
 
 export const TicketRow = ({ ticket, onUpdate }) => {
-  const { role } = useSupabaseAuth();
+  const { role, token } = useSupabaseAuth();
   const canEdit = role !== 'base';
   const [isOpen, setIsOpen] = useState(false);
   const [internalNotes, setInternalNotes] = useState('');
@@ -60,15 +60,86 @@ export const TicketRow = ({ ticket, onUpdate }) => {
   const [isApproving, setIsApproving] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedTemplateType, setSelectedTemplateType] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [composeSubject, setComposeSubject] = useState('');
+  const [composeBody, setComposeBody] = useState('');
+  const [isSendingManual, setIsSendingManual] = useState(false);
   const { toast } = useToast();
   const customerDecision = decisionMap[ticket.last_customer_decision] || null;
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
   useEffect(() => {
     setWorkDoneSummary(ticket.work_done_summary || '');
     setFinalCost(ticket.final_cost || '');
     setInternalNotes(ticket.internal_notes || '');
     setCurrentDiagnosis(ticket.diagnosis || null);
+    setComposeSubject(`Re: Ärende #${ticket.ticket_number}`);
   }, [ticket]);
+
+  const loadMessages = useCallback(async () => {
+    if (!token) return;
+    setLoadingMessages(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/tickets/${ticket.id}/messages`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) throw new Error('Kunde inte hämta kommunikationslogg.');
+      const data = await response.json();
+      setMessages(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error(error);
+      setMessages([]);
+    } finally {
+      setLoadingMessages(false);
+    }
+  }, [API_BASE_URL, ticket.id, token]);
+
+  useEffect(() => {
+    if (isOpen) {
+      loadMessages();
+    }
+  }, [isOpen, loadMessages]);
+
+  const handleSendManualEmail = async () => {
+    if (!canEdit) return;
+    if (!composeBody.trim()) {
+      toast({ title: 'Meddelandetext saknas', variant: 'destructive' });
+      return;
+    }
+    setIsSendingManual(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/tickets/${ticket.id}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          channel: 'email',
+          subject: composeSubject,
+          body: composeBody,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Kunde inte skicka meddelandet.');
+      }
+      setComposeBody('');
+      setMessages((prev) => [payload, ...prev]);
+      toast({ title: 'Skickat', description: 'Meddelandet skickades till kunden.' });
+    } catch (error) {
+      toast({
+        title: 'Kunde inte skicka',
+        description: error?.message || 'Försök igen.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSendingManual(false);
+    }
+  };
 
   const handleFieldUpdate = (field, value) => {
     if (ticket[field] !== value) {
@@ -258,19 +329,7 @@ export const TicketRow = ({ ticket, onUpdate }) => {
                 <p className="text-sm text-gray-600 flex items-center gap-2"><Phone size={14} /> {ticket.customer_phone}</p>
                 <p className="text-sm text-gray-600 flex items-center gap-2"><Languages size={14} /> Godkännande: {languageMap[ticket.disclaimer_language] || ticket.disclaimer_language}</p>
                 <p className="text-sm text-gray-600 flex items-center gap-2"><Calendar size={14} /> Skapad: {new Date(ticket.created_at).toLocaleString('sv-SE')}</p>
-              </div>
-
-              <div className="space-y-4">
-                <h3 className="font-semibold text-gray-800 flex items-center gap-2"><Smartphone size={16} />Enhetsinformation</h3>
-                <p className="text-sm text-gray-700 font-medium">{ticket.device_model || 'Modell ej angiven'}</p>
-                <p className="text-sm text-gray-600"><strong className="font-medium">Felbeskrivning:</strong> {ticket.issue_description}</p>
-                {ticket.additional_notes && <p className="text-sm text-gray-600"><strong className="font-medium">Anteckningar från kund:</strong> {ticket.additional_notes}</p>}
-                 {currentDiagnosis && <p className="text-sm text-gray-600 mt-2 p-2 bg-yellow-50 border-l-4 border-yellow-300"><strong className="font-medium">Senaste diagnos:</strong> {currentDiagnosis}</p>}
-              </div>
-
-              <div className="space-y-4">
-                 <h3 className="font-semibold text-gray-800 flex items-center gap-2"><Edit2 size={16} />Hantering</h3>
-                 <div className="space-y-2">
+                <div className="space-y-2">
                   <div className={`rounded-lg border p-3 text-sm ${customerDecision ? customerDecision.className : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
                     <p className="font-semibold flex items-center gap-2">
                       <MessageSquare size={14} />
@@ -303,7 +362,68 @@ export const TicketRow = ({ ticket, onUpdate }) => {
                       <p className="mt-1 text-gray-500">Ingen kontakt loggad ännu.</p>
                     )}
                   </div>
-                 </div>
+                </div>
+                <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-3">
+                  <p className="font-semibold text-sm text-gray-800">Kommunikation</p>
+                  <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
+                    {loadingMessages ? (
+                      <p className="text-xs text-gray-500">Laddar...</p>
+                    ) : messages.length === 0 ? (
+                      <p className="text-xs text-gray-500">Ingen kommunikation loggad ännu.</p>
+                    ) : (
+                      messages.map((msg) => (
+                        <div key={msg.id} className={`rounded-md p-2 text-xs border ${msg.direction === 'outbound' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'}`}>
+                          <p className="font-semibold text-gray-700">
+                            {msg.direction === 'outbound' ? 'Utgående' : 'Inkommande'} · {channelLabel(msg.channel)}
+                          </p>
+                          {msg.subject && <p className="text-gray-700 mt-1">{msg.subject}</p>}
+                          {msg.body && <p className="text-gray-600 mt-1 break-words whitespace-pre-wrap">{msg.body}</p>}
+                          <p className="text-gray-500 mt-1">
+                            {new Date(msg.created_at).toLocaleString('sv-SE')}
+                            {msg.sender_user ? ` · ${msg.sender_user}` : ''}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  {canEdit && (
+                    <div className="space-y-2 border-t pt-3">
+                      <Input
+                        value={composeSubject}
+                        onChange={(e) => setComposeSubject(e.target.value)}
+                        placeholder="Ämne"
+                        className="bg-white"
+                      />
+                      <Textarea
+                        value={composeBody}
+                        onChange={(e) => setComposeBody(e.target.value)}
+                        placeholder="Skriv e-post till kunden..."
+                        className="bg-white min-h-[90px]"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={handleSendManualEmail}
+                        disabled={isSendingManual || !ticket.customer_email}
+                        className="w-full"
+                      >
+                        {isSendingManual ? <Loader2 size={14} className="mr-2 animate-spin" /> : <Mail size={14} className="mr-2" />}
+                        Skicka e-post till kund
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="font-semibold text-gray-800 flex items-center gap-2"><Smartphone size={16} />Enhetsinformation</h3>
+                <p className="text-sm text-gray-700 font-medium">{ticket.device_model || 'Modell ej angiven'}</p>
+                <p className="text-sm text-gray-600"><strong className="font-medium">Felbeskrivning:</strong> {ticket.issue_description}</p>
+                {ticket.additional_notes && <p className="text-sm text-gray-600"><strong className="font-medium">Anteckningar från kund:</strong> {ticket.additional_notes}</p>}
+                 {currentDiagnosis && <p className="text-sm text-gray-600 mt-2 p-2 bg-yellow-50 border-l-4 border-yellow-300"><strong className="font-medium">Senaste diagnos:</strong> {currentDiagnosis}</p>}
+              </div>
+
+              <div className="space-y-4">
+                 <h3 className="font-semibold text-gray-800 flex items-center gap-2"><Edit2 size={16} />Hantering</h3>
                 <div className="grid grid-cols-1 gap-4">
                   <div>
                     <Label htmlFor={`diagnosis-${ticket.id}`} className="text-sm font-medium text-gray-700 flex items-center gap-2 mb-2">

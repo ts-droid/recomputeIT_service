@@ -896,6 +896,78 @@ app.patch('/api/tickets/:id', requireAuth, requireRole('service'), async (req, r
   }
 });
 
+app.get('/api/tickets/:id/messages', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rows } = await query(
+      `SELECT id, ticket_id, channel, direction, sender_user, to_number, from_number, subject, body, provider, provider_id, created_at
+       FROM message_logs
+       WHERE ticket_id = $1
+       ORDER BY created_at DESC
+       LIMIT 100`,
+      [id]
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error('GET /api/tickets/:id/messages error:', error);
+    res.status(500).json({ error: 'Kunde inte hämta kommunikationslogg.' });
+  }
+});
+
+app.post('/api/tickets/:id/messages', requireAuth, requireRole('service'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { subject, body, channel = 'email' } = req.body || {};
+    const sender = req.user?.email || 'okänd';
+
+    if (channel !== 'email') {
+      return res.status(400).json({ error: 'Endast e-post stöds för manuell konversation just nu.' });
+    }
+    if (!body?.toString().trim()) {
+      return res.status(400).json({ error: 'Meddelandetext saknas.' });
+    }
+
+    const { rows } = await query('SELECT * FROM service_tickets WHERE id = $1', [id]);
+    const ticket = rows[0];
+    if (!ticket) {
+      return res.status(404).json({ error: 'Ärende hittades inte.' });
+    }
+    if (!ticket.customer_email) {
+      return res.status(400).json({ error: 'Kunden saknar e-postadress.' });
+    }
+
+    const resolvedSubject = subject?.toString().trim() || `Re: Ärende #${ticket.ticket_number}`;
+    const resolvedBody = body.toString().trim();
+
+    await sendEmail({
+      to: ticket.customer_email,
+      subject: resolvedSubject,
+      body: resolvedBody,
+    });
+
+    const inserted = await query(
+      `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, subject, body, provider)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       RETURNING id, ticket_id, channel, direction, sender_user, to_number, from_number, subject, body, provider, provider_id, created_at`,
+      [ticket.id, 'email', 'outbound', sender, ticket.customer_email, resolvedSubject, resolvedBody, 'smtp']
+    );
+
+    await query(
+      `UPDATE service_tickets
+       SET last_staff_contact_at = NOW(),
+           last_staff_contact_by = $2,
+           last_staff_contact_channel = 'email'
+       WHERE id = $1`,
+      [ticket.id, sender]
+    );
+
+    res.status(201).json(inserted.rows[0]);
+  } catch (error) {
+    console.error('POST /api/tickets/:id/messages error:', error);
+    res.status(500).json({ error: 'Kunde inte skicka meddelandet.' });
+  }
+});
+
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body || {};
@@ -1153,9 +1225,9 @@ app.post('/api/notify/cost-proposal', requireAuth, requireRole('service'), async
           message,
         });
         await query(
-          `INSERT INTO message_logs (ticket_id, channel, direction, to_number, body, provider, provider_id)
-           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-          [ticket.id, 'sms', 'outbound', ticket.customer_phone, message, '46elks', smsResponse?.id || null]
+          `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, body, provider, provider_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+          [ticket.id, 'sms', 'outbound', sender, ticket.customer_phone, message, '46elks', smsResponse?.id || null]
         );
         delivery.sms_sent = true;
       } catch (error) {
@@ -1167,9 +1239,9 @@ app.post('/api/notify/cost-proposal', requireAuth, requireRole('service'), async
         try {
           await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody });
           await query(
-            `INSERT INTO message_logs (ticket_id, channel, direction, to_number, subject, body, provider)
-             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-            [ticket.id, 'email', 'outbound', ticket.customer_email, translatedSubject, translatedBody, 'smtp']
+            `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, subject, body, provider)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [ticket.id, 'email', 'outbound', sender, ticket.customer_email, translatedSubject, translatedBody, 'smtp']
           );
           delivery.email_sent = true;
         } catch (error) {
@@ -1196,9 +1268,9 @@ app.post('/api/notify/cost-proposal', requireAuth, requireRole('service'), async
             message,
           });
           await query(
-            `INSERT INTO message_logs (ticket_id, channel, direction, to_number, body, provider, provider_id)
-             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-            [ticket.id, 'sms', 'outbound', ticket.customer_phone, message, '46elks', smsResponse?.id || null]
+            `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, body, provider, provider_id)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [ticket.id, 'sms', 'outbound', sender, ticket.customer_phone, message, '46elks', smsResponse?.id || null]
           );
           delivery.sms_sent = true;
         } catch (error) {
@@ -1211,9 +1283,9 @@ app.post('/api/notify/cost-proposal', requireAuth, requireRole('service'), async
         try {
           await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody });
           await query(
-            `INSERT INTO message_logs (ticket_id, channel, direction, to_number, subject, body, provider)
-             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-            [ticket.id, 'email', 'outbound', ticket.customer_email, translatedSubject, translatedBody, 'smtp']
+            `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, subject, body, provider)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [ticket.id, 'email', 'outbound', sender, ticket.customer_email, translatedSubject, translatedBody, 'smtp']
           );
           delivery.email_sent = true;
         } catch (error) {
@@ -1234,9 +1306,9 @@ app.post('/api/notify/cost-proposal', requireAuth, requireRole('service'), async
       }
       await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody });
       await query(
-        `INSERT INTO message_logs (ticket_id, channel, direction, to_number, subject, body, provider)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [ticket.id, 'email', 'outbound', ticket.customer_email, translatedSubject, translatedBody, 'smtp']
+        `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, subject, body, provider)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [ticket.id, 'email', 'outbound', sender, ticket.customer_email, translatedSubject, translatedBody, 'smtp']
       );
       delivery.email_sent = true;
     }
@@ -1298,9 +1370,9 @@ app.post('/api/notify/repair-ready', requireAuth, requireRole('service'), async 
           message,
         });
         await query(
-          `INSERT INTO message_logs (ticket_id, channel, direction, to_number, body, provider, provider_id)
-           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-          [ticket.id, 'sms', 'outbound', ticket.customer_phone, message, '46elks', smsResponse?.id || null]
+          `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, body, provider, provider_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+          [ticket.id, 'sms', 'outbound', sender, ticket.customer_phone, message, '46elks', smsResponse?.id || null]
         );
         delivery.sms_sent = true;
       } catch (error) {
@@ -1312,9 +1384,9 @@ app.post('/api/notify/repair-ready', requireAuth, requireRole('service'), async 
         try {
           await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody });
           await query(
-            `INSERT INTO message_logs (ticket_id, channel, direction, to_number, subject, body, provider)
-             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-            [ticket.id, 'email', 'outbound', ticket.customer_email, translatedSubject, translatedBody, 'smtp']
+            `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, subject, body, provider)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [ticket.id, 'email', 'outbound', sender, ticket.customer_email, translatedSubject, translatedBody, 'smtp']
           );
           delivery.email_sent = true;
         } catch (error) {
@@ -1341,9 +1413,9 @@ app.post('/api/notify/repair-ready', requireAuth, requireRole('service'), async 
             message,
           });
           await query(
-            `INSERT INTO message_logs (ticket_id, channel, direction, to_number, body, provider, provider_id)
-             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-            [ticket.id, 'sms', 'outbound', ticket.customer_phone, message, '46elks', smsResponse?.id || null]
+            `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, body, provider, provider_id)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [ticket.id, 'sms', 'outbound', sender, ticket.customer_phone, message, '46elks', smsResponse?.id || null]
           );
           delivery.sms_sent = true;
         } catch (error) {
@@ -1356,9 +1428,9 @@ app.post('/api/notify/repair-ready', requireAuth, requireRole('service'), async 
         try {
           await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody });
           await query(
-            `INSERT INTO message_logs (ticket_id, channel, direction, to_number, subject, body, provider)
-             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-            [ticket.id, 'email', 'outbound', ticket.customer_email, translatedSubject, translatedBody, 'smtp']
+            `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, subject, body, provider)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [ticket.id, 'email', 'outbound', sender, ticket.customer_email, translatedSubject, translatedBody, 'smtp']
           );
           delivery.email_sent = true;
         } catch (error) {
@@ -1379,9 +1451,9 @@ app.post('/api/notify/repair-ready', requireAuth, requireRole('service'), async 
       }
       await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody });
       await query(
-        `INSERT INTO message_logs (ticket_id, channel, direction, to_number, subject, body, provider)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [ticket.id, 'email', 'outbound', ticket.customer_email, translatedSubject, translatedBody, 'smtp']
+        `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, subject, body, provider)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [ticket.id, 'email', 'outbound', sender, ticket.customer_email, translatedSubject, translatedBody, 'smtp']
       );
       delivery.email_sent = true;
     }
