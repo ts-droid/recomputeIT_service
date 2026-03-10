@@ -168,20 +168,46 @@ const resolvePreferredContactChannel = (ticketOrPayload = {}) => {
   return '';
 };
 
-const EMAIL_REPLY_MARKERS = [
-  '----- svara ovanför denna linje -----',
-  '----- reply above this line -----',
-  '----- الرد فوق هذا السطر -----',
-  '----- responda encima de esta línea -----',
-  '----- vastaa tämän rivin yläpuolelle -----',
-  '----- li ser vê rêzê bersiv bidin -----',
-  '----- bu satırın üstüne yanıtlayın -----',
-  '----- odpowiedz powyżej tej linii -----',
-  '----- відповідайте вище цього рядка -----',
-];
+const REPLY_MARKER_BY_LANGUAGE = {
+  sv: '----- Svara ovanför denna linje -----',
+  en: '----- Reply above this line -----',
+  ar: '----- الرد فوق هذا السطر -----',
+  es: '----- Responda encima de esta línea -----',
+  fi: '----- Vastaa tämän rivin yläpuolelle -----',
+  ku: '----- Li ser vê rêzê bersiv bidin -----',
+  tr: '----- Bu satırın üstüne yanıtlayın -----',
+  pl: '----- Odpowiedz powyżej tej linii -----',
+  uk: '----- Відповідайте вище цього рядка -----',
+};
 
-const getReplyMarkerLine = (language = 'sv') =>
-  language === 'en' ? '----- Reply above this line -----' : '----- Svara ovanför denna linje -----';
+const REPLY_HINT_BY_LANGUAGE = {
+  sv: 'Skriv ditt svar på raden ovan.',
+  en: 'Write your response on the line above.',
+  ar: 'اكتب ردك في السطر أعلاه.',
+  es: 'Escriba su respuesta en la línea de arriba.',
+  fi: 'Kirjoita vastauksesi yllä olevalle riville.',
+  ku: 'Bersiva xwe li rêza jor binivîse.',
+  tr: 'Yanıtınızı yukarıdaki satıra yazın.',
+  pl: 'Wpisz odpowiedź w wierszu powyżej.',
+  uk: 'Напишіть свою відповідь у рядку вище.',
+};
+
+const EMAIL_REPLY_MARKERS = Object.values(REPLY_MARKER_BY_LANGUAGE).map((line) => line.toLowerCase());
+
+const getReplyMarkerLine = (language = 'sv') => REPLY_MARKER_BY_LANGUAGE[language] || REPLY_MARKER_BY_LANGUAGE.sv;
+const getReplyHintLine = (language = 'sv') => REPLY_HINT_BY_LANGUAGE[language] || REPLY_HINT_BY_LANGUAGE.sv;
+
+const appendReplyGuidance = (body = '', language = 'sv') => {
+  const marker = getReplyMarkerLine(language);
+  const hint = getReplyHintLine(language);
+  const normalizedBody = String(body || '').trim();
+  const bodyWithoutAnyMarker = normalizedBody
+    .split('\n')
+    .filter((line) => !EMAIL_REPLY_MARKERS.includes(line.trim().toLowerCase()))
+    .join('\n')
+    .trim();
+  return `${bodyWithoutAnyMarker}\n\n${marker}\n${hint}`.trim();
+};
 
 const extractTopReplyText = (rawMessage = '') => {
   const message = String(rawMessage || '').replace(/\r/g, '').trim();
@@ -593,10 +619,7 @@ const sendDecisionClarification = async ({ ticket, channel, smsTo, emailTo }) =>
 
   if (channel === 'email' && emailTo) {
     const language = getLanguage(ticket);
-    const marker = getReplyMarkerLine(language);
-    const bodyWithMarker = template.body?.toLowerCase().includes(marker.toLowerCase())
-      ? template.body
-      : `${template.body}\n\n${marker}`;
+    const bodyWithMarker = appendReplyGuidance(template.body, language);
     await sendEmail({
       to: emailTo,
       subject: template.subject,
@@ -689,21 +712,21 @@ const emailTemplates = {
   costProposal: {
     sv: (ticket, amount) => ({
       subject: `Kostnadsförslag för ärende #${ticket.ticket_number}`,
-      body: `Hej ${ticket.customer_name},\n\nVi har tagit fram ett kostnadsförslag för ditt ärende (#${ticket.ticket_number}).\nKostnad: ${amount} kr.\n\nSvara gärna på detta mail eller via SMS med JA för godkännande, eller NEJ om du vill avböja.\n\n${getReplyMarkerLine('sv')}\nSkriv ditt svar på raden ovan.\n\nVänliga hälsningar\nre:Compute-IT`,
+      body: `Hej ${ticket.customer_name},\n\nVi har tagit fram ett kostnadsförslag för ditt ärende (#${ticket.ticket_number}).\nKostnad: ${amount} kr.\n\nSvara gärna på detta mail eller via SMS med JA för godkännande, eller NEJ om du vill avböja.\n\nVänliga hälsningar\nre:Compute-IT`,
     }),
     en: (ticket, amount) => ({
       subject: `Cost proposal for case #${ticket.ticket_number}`,
-      body: `Hi ${ticket.customer_name},\n\nWe have prepared a cost proposal for your case (#${ticket.ticket_number}).\nCost: ${amount} SEK.\n\nPlease reply with YES to approve, or NO to decline.\n\n${getReplyMarkerLine('en')}\nWrite your response on the line above.\n\nBest regards\nre:Compute-IT`,
+      body: `Hi ${ticket.customer_name},\n\nWe have prepared a cost proposal for your case (#${ticket.ticket_number}).\nCost: ${amount} SEK.\n\nPlease reply with YES to approve, or NO to decline.\n\nBest regards\nre:Compute-IT`,
     }),
   },
   repairReady: {
     sv: (ticket) => ({
       subject: `Din enhet är klar (#${ticket.ticket_number})`,
-      body: `Hej ${ticket.customer_name},\n\nDin enhet är klar för upphämtning. Välkommen in!\n\n${getReplyMarkerLine('sv')}\nSkriv ditt svar på raden ovan.\n\nVänliga hälsningar\nre:Compute-IT`,
+      body: `Hej ${ticket.customer_name},\n\nDin enhet är klar för upphämtning. Välkommen in!\n\nVänliga hälsningar\nre:Compute-IT`,
     }),
     en: (ticket) => ({
       subject: `Your device is ready (#${ticket.ticket_number})`,
-      body: `Hi ${ticket.customer_name},\n\nYour device is ready for pickup. Welcome in!\n\n${getReplyMarkerLine('en')}\nWrite your response on the line above.\n\nBest regards\nre:Compute-IT`,
+      body: `Hi ${ticket.customer_name},\n\nYour device is ready for pickup. Welcome in!\n\nBest regards\nre:Compute-IT`,
     }),
   },
 };
@@ -887,7 +910,7 @@ const buildNotificationPreview = async ({ templateType, ticket, language }) => {
       emailTemplates.costProposal[language]?.(localizedTicket, amount) ||
       emailTemplates.costProposal.sv(localizedTicket, amount);
     const subject = await translateIfNeeded(template.subject, language);
-    const body = await translateIfNeeded(template.body, language);
+    const body = appendReplyGuidance(await translateIfNeeded(template.body, language), language);
     return { subject, body, sms };
   }
 
@@ -899,7 +922,7 @@ const buildNotificationPreview = async ({ templateType, ticket, language }) => {
     emailTemplates.repairReady[language]?.(localizedTicket) ||
     emailTemplates.repairReady.sv(localizedTicket);
   const subject = await translateIfNeeded(template.subject, language);
-  const body = await translateIfNeeded(template.body, language);
+  const body = appendReplyGuidance(await translateIfNeeded(template.body, language), language);
   return { subject, body, sms };
 };
 
@@ -1267,11 +1290,7 @@ app.post('/api/tickets/:id/messages', requireAuth, requireRole('service'), async
       translateIfNeeded(baseBody, language, { allowEnglish: true }),
     ]);
     const resolvedSubject = translatedSubject?.toString().trim() || baseSubject;
-    let resolvedBody = translatedBody?.toString().trim() || baseBody;
-    const marker = getReplyMarkerLine(language);
-    if (!resolvedBody.toLowerCase().includes(marker.toLowerCase())) {
-      resolvedBody = `${resolvedBody}\n\n${marker}`;
-    }
+    const resolvedBody = appendReplyGuidance(translatedBody?.toString().trim() || baseBody, language);
     if (!resolvedBody) {
       return res.status(400).json({ error: 'Meddelandetext saknas efter översättning.' });
     }
@@ -1547,7 +1566,7 @@ app.post('/api/notify/cost-proposal', requireAuth, requireRole('service'), async
     const template =
       emailTemplates.costProposal[language]?.(localizedTicket, amount) ||
       emailTemplates.costProposal.sv(localizedTicket, amount);
-    const translatedBody = await translateIfNeeded(template.body, language);
+    const translatedBody = appendReplyGuidance(await translateIfNeeded(template.body, language), language);
     const translatedSubject = await translateIfNeeded(template.subject, language);
     const delivery = { sms_sent: false, email_sent: false, warnings: [] };
     const sender = req.user?.email || 'okänd';
@@ -1713,7 +1732,7 @@ app.post('/api/notify/repair-ready', requireAuth, requireRole('service'), async 
     const message = await translateIfNeeded(messageBase, language);
     const template =
       emailTemplates.repairReady[language]?.(localizedTicket) || emailTemplates.repairReady.sv(localizedTicket);
-    const translatedBody = await translateIfNeeded(template.body, language);
+    const translatedBody = appendReplyGuidance(await translateIfNeeded(template.body, language), language);
     const translatedSubject = await translateIfNeeded(template.subject, language);
     const delivery = { sms_sent: false, email_sent: false, warnings: [] };
     const sender = req.user?.email || 'okänd';
@@ -2053,7 +2072,7 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
     } else {
       await query(
         `UPDATE service_tickets
-         SET last_customer_decision = 'unknown',
+         SET last_customer_decision = 'pending',
              last_customer_response_text = $2,
              last_customer_response_channel = 'email',
              last_customer_response_at = NOW()
@@ -2163,7 +2182,7 @@ app.post('/api/webhooks/46elks', async (req, res) => {
     } else {
       await query(
         `UPDATE service_tickets
-         SET last_customer_decision = 'unknown',
+         SET last_customer_decision = 'pending',
              last_customer_response_text = $2,
              last_customer_response_channel = 'sms',
              last_customer_response_at = NOW()

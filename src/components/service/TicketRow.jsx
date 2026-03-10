@@ -38,6 +38,7 @@ const languageMap = {
 const decisionMap = {
   approved: { label: 'Kund svar: Godkänd', className: 'bg-green-100 text-green-800 border-green-300' },
   declined: { label: 'Kund svar: Nekad', className: 'bg-red-100 text-red-800 border-red-300' },
+  pending: { label: 'Kund svar: Väntar bedömning', className: 'bg-amber-100 text-amber-800 border-amber-300' },
   unknown: { label: 'Kund svar: Oklart svar', className: 'bg-yellow-100 text-yellow-800 border-yellow-300' },
 };
 
