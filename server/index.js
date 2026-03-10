@@ -46,6 +46,7 @@ const SMTP_PORT = Number(process.env.SMTP_PORT || 587);
 const SMTP_USER = process.env.SMTP_USER || '';
 const SMTP_PASS = process.env.SMTP_PASS || '';
 const SMTP_FROM = process.env.SMTP_FROM || '';
+const EMAIL_REPLY_TO = process.env.EMAIL_REPLY_TO || '';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const RESEND_FROM = process.env.RESEND_FROM || '';
@@ -379,6 +380,7 @@ const sendEmail = async ({ to, subject, body }) => {
     try {
       const result = await mailer.sendMail({
         from: SMTP_FROM || SMTP_USER,
+        replyTo: EMAIL_REPLY_TO || undefined,
         to,
         subject,
         text: body,
@@ -402,10 +404,11 @@ const sendEmail = async ({ to, subject, body }) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from: RESEND_FROM,
-          to: Array.isArray(to) ? to : [to],
-          subject,
-          text: body,
+        from: RESEND_FROM,
+        reply_to: EMAIL_REPLY_TO || undefined,
+        to: Array.isArray(to) ? to : [to],
+        subject,
+        text: body,
         }),
       });
 
