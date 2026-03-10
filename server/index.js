@@ -363,7 +363,7 @@ const decisionAckTemplates = {
 
 const translateIfNeeded = async (text, language) => {
   if (!DEEPSEEK_API_KEY) return text;
-  if (!language || language === 'sv') return text;
+  if (!language || language === 'sv' || language === 'en') return text;
 
   try {
     const response = await fetch('https://api.deepseek.com/chat/completions', {
@@ -395,7 +395,11 @@ const translateIfNeeded = async (text, language) => {
 
     const data = await response.json();
     const translated = data?.choices?.[0]?.message?.content?.trim();
-    return translated || text;
+    if (!translated) return text;
+
+    // Guard against model wrappers like "Language: sv Text: ..."
+    const cleaned = translated.replace(/^Language:\s*[a-z-]+\s*Text:\s*/i, '').trim();
+    return cleaned || text;
   } catch (error) {
     console.error('DeepSeek translation failed:', error);
     return text;
