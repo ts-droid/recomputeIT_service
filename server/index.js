@@ -660,16 +660,21 @@ app.post('/api/notify/cost-proposal', requireAuth, requireRole('service'), async
       if (!ticket.customer_phone) {
         return res.status(400).json({ error: 'Telefonnummer saknas.' });
       }
-      const smsResponse = await sendSms({
-        to: ticket.customer_phone,
-        message,
-      });
-      await query(
-        `INSERT INTO message_logs (ticket_id, channel, direction, to_number, body, provider, provider_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [ticket.id, 'sms', 'outbound', ticket.customer_phone, message, '46elks', smsResponse?.id || null]
-      );
-      delivery.sms_sent = true;
+      try {
+        const smsResponse = await sendSms({
+          to: ticket.customer_phone,
+          message,
+        });
+        await query(
+          `INSERT INTO message_logs (ticket_id, channel, direction, to_number, body, provider, provider_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          [ticket.id, 'sms', 'outbound', ticket.customer_phone, message, '46elks', smsResponse?.id || null]
+        );
+        delivery.sms_sent = true;
+      } catch (error) {
+        console.error('SMS send failed (cost-proposal):', error);
+        delivery.warnings.push('SMS kunde inte skickas.');
+      }
 
       if (ticket.customer_email) {
         try {
@@ -682,8 +687,15 @@ app.post('/api/notify/cost-proposal', requireAuth, requireRole('service'), async
           delivery.email_sent = true;
         } catch (error) {
           console.error('Auto email after sms (cost-proposal) failed:', error);
-          delivery.warnings.push('SMS skickades, men e-post kunde inte skickas.');
+          delivery.warnings.push(delivery.sms_sent ? 'SMS skickades, men e-post kunde inte skickas.' : 'E-post kunde inte skickas.');
         }
+      }
+
+      if (!delivery.sms_sent && !delivery.email_sent) {
+        return res.status(500).json({
+          error: 'Kunde inte skicka.',
+          details: delivery.warnings.join(' ') || 'Både SMS och e-post misslyckades.',
+        });
       }
     } else {
       if (!ticket.customer_email) {
@@ -731,16 +743,21 @@ app.post('/api/notify/repair-ready', requireAuth, requireRole('service'), async 
       if (!ticket.customer_phone) {
         return res.status(400).json({ error: 'Telefonnummer saknas.' });
       }
-      const smsResponse = await sendSms({
-        to: ticket.customer_phone,
-        message,
-      });
-      await query(
-        `INSERT INTO message_logs (ticket_id, channel, direction, to_number, body, provider, provider_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [ticket.id, 'sms', 'outbound', ticket.customer_phone, message, '46elks', smsResponse?.id || null]
-      );
-      delivery.sms_sent = true;
+      try {
+        const smsResponse = await sendSms({
+          to: ticket.customer_phone,
+          message,
+        });
+        await query(
+          `INSERT INTO message_logs (ticket_id, channel, direction, to_number, body, provider, provider_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          [ticket.id, 'sms', 'outbound', ticket.customer_phone, message, '46elks', smsResponse?.id || null]
+        );
+        delivery.sms_sent = true;
+      } catch (error) {
+        console.error('SMS send failed (repair-ready):', error);
+        delivery.warnings.push('SMS kunde inte skickas.');
+      }
 
       if (ticket.customer_email) {
         try {
@@ -753,8 +770,15 @@ app.post('/api/notify/repair-ready', requireAuth, requireRole('service'), async 
           delivery.email_sent = true;
         } catch (error) {
           console.error('Auto email after sms (repair-ready) failed:', error);
-          delivery.warnings.push('SMS skickades, men e-post kunde inte skickas.');
+          delivery.warnings.push(delivery.sms_sent ? 'SMS skickades, men e-post kunde inte skickas.' : 'E-post kunde inte skickas.');
         }
+      }
+
+      if (!delivery.sms_sent && !delivery.email_sent) {
+        return res.status(500).json({
+          error: 'Kunde inte skicka.',
+          details: delivery.warnings.join(' ') || 'Både SMS och e-post misslyckades.',
+        });
       }
     } else {
       if (!ticket.customer_email) {
