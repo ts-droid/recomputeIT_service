@@ -364,12 +364,12 @@ export const TicketRow = ({ ticket, onUpdate }) => {
                           key={msg.id}
                           type="button"
                           onClick={() => setSelectedMessage(msg)}
-                          className={`flex ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}
+                          className={`flex w-full ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}
                         >
-                          <div className={`w-full rounded-xl p-3 text-xs border shadow-sm ${
+                          <div className={`max-w-[86%] rounded-xl p-3 text-xs border shadow-sm text-left ${
                             msg.direction === 'outbound'
-                              ? 'bg-green-100 border-green-200 text-gray-800'
-                              : 'bg-white border-gray-200 text-gray-800'
+                              ? 'bg-green-100 border-green-200 text-gray-800 rounded-br-md'
+                              : 'bg-white border-gray-200 text-gray-800 rounded-bl-md'
                           }`}>
                           <p className="font-semibold text-gray-700">
                             {msg.direction === 'outbound' ? 'Ni' : 'Kund'} · {channelLabel(msg.channel)}
