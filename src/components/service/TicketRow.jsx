@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, ChevronDown, ChevronRight, User, Smartphone, Mail, Phone, Calendar, Languages, Edit2, ShieldCheck, PenLine as FilePenLine, Wrench, DollarSign, Printer, Sparkles, EyeOff, Eye } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { TicketActions } from '@/components/service/TicketActions';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,6 +10,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { printFinalReceipt, printDocuments } from '@/lib/print';
 import { Button } from '@/components/ui/button';
 import { useSupabaseAuth } from '@/contexts/SupabaseAuthContext';
+import { EmailTemplateDialog } from '@/components/service/EmailTemplateDialog';
 
 const statusStyles = {
   "Nytt": "bg-blue-100 text-blue-800",
@@ -43,6 +43,8 @@ export const TicketRow = ({ ticket, onUpdate }) => {
   const [currentDiagnosis, setCurrentDiagnosis] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedTemplateType, setSelectedTemplateType] = useState(null);
   const { toast } = useToast();
   useEffect(() => {
     setWorkDoneSummary(ticket.work_done_summary || '');
@@ -76,7 +78,7 @@ export const TicketRow = ({ ticket, onUpdate }) => {
             cost_proposal_approved: true,
             status: newStatus,
             work_done_summary: currentDiagnosis,
-            final_cost: ticket.final_cost,
+            final_cost: finalCost,
             diagnosis: null,
         };
         
@@ -101,6 +103,38 @@ export const TicketRow = ({ ticket, onUpdate }) => {
         }
     }
     setIsApproving(false);
+  };
+
+  const handleNotify = async (templateType) => {
+    if (!canEdit) {
+      toast({
+        title: "Behörighet saknas",
+        description: "Du har inte behörighet att uppdatera ärenden.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!ticket.customer_email) {
+      toast({
+        title: "E-postadress saknas",
+        description: "Kan inte meddela kund eftersom ingen e-postadress är registrerad.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (templateType === 'kostnadsforslag') {
+      await onUpdate(ticket.id, { diagnosis: currentDiagnosis || '', final_cost: finalCost || '' });
+    }
+
+    const newStatus = templateType === 'reparationFardig' ? 'Färdig' : 'Väntar på kund';
+    if (ticket.status !== newStatus) {
+      await onUpdate(ticket.id, { status: newStatus });
+    }
+
+    setSelectedTemplateType(templateType);
+    setIsDialogOpen(true);
   };
 
 
@@ -219,7 +253,49 @@ export const TicketRow = ({ ticket, onUpdate }) => {
 
               <div className="space-y-4">
                  <h3 className="font-semibold text-gray-800 flex items-center gap-2"><Edit2 size={16} />Hantering</h3>
-                <TicketActions ticket={ticket} onUpdate={onUpdate} disabled={!canEdit} />
+                <div className="grid grid-cols-1 gap-4">
+                  <div>
+                    <Label htmlFor={`diagnosis-${ticket.id}`} className="text-sm font-medium text-gray-700 flex items-center gap-2 mb-2">
+                      <Wrench size={16} />
+                      Planerade åtgärder
+                    </Label>
+                    <Textarea
+                      id={`diagnosis-${ticket.id}`}
+                      value={currentDiagnosis || ''}
+                      onChange={(e) => setCurrentDiagnosis(e.target.value)}
+                      onBlur={() => handleFieldUpdate('diagnosis', currentDiagnosis || '')}
+                      placeholder="Beskriv planerade åtgärder..."
+                      className="bg-white min-h-[100px]"
+                      disabled={!canEdit}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor={`cost-proposal-${ticket.id}`} className="text-sm font-medium text-gray-700 flex items-center gap-2 mb-2">
+                      <DollarSign size={16} />
+                      Kostnadsförslag (kr)
+                    </Label>
+                    <Input
+                      id={`cost-proposal-${ticket.id}`}
+                      value={finalCost}
+                      onChange={(e) => setFinalCost(e.target.value)}
+                      onBlur={() => handleFieldUpdate('final_cost', finalCost)}
+                      placeholder="t.ex. 1299"
+                      className="bg-white"
+                      disabled={!canEdit}
+                    />
+                    <div className="mt-3">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-purple-500/50 bg-purple-50 text-purple-700 hover:bg-purple-100 hover:text-purple-800 gap-2"
+                        onClick={() => handleNotify('kostnadsforslag')}
+                        disabled={!ticket.customer_email || !canEdit}
+                      >
+                        <DollarSign size={16} /> Skicka kostnadsförslag
+                      </Button>
+                    </div>
+                  </div>
+                </div>
 
                 <div className="pt-4 space-y-4">
                    <div className={`p-3 rounded-lg transition-colors ${ticket.cost_proposal_approved ? 'bg-green-100 border-green-300' : 'bg-gray-100 border-gray-200'} border`}>
@@ -259,7 +335,7 @@ export const TicketRow = ({ ticket, onUpdate }) => {
                            <DollarSign size={16} />
                            Slutlig kostnad (kr)
                         </Label>
-                        <Input
+                       <Input
                           id={`final-cost-${ticket.id}`}
                           value={finalCost}
                           onChange={(e) => setFinalCost(e.target.value)}
@@ -268,6 +344,17 @@ export const TicketRow = ({ ticket, onUpdate }) => {
                           className="bg-white"
                           disabled={!canEdit}
                         />
+                        <div className="mt-3">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-blue-500/50 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 gap-2"
+                            onClick={() => handleNotify('reparationFardig')}
+                            disabled={!ticket.customer_email || !canEdit}
+                          >
+                            <Mail size={16} /> Meddela att reparation är klar
+                          </Button>
+                        </div>
                       </div>
                   </div>
 
@@ -319,6 +406,13 @@ export const TicketRow = ({ ticket, onUpdate }) => {
                     </div>
                   </div>
                 </div>
+                <EmailTemplateDialog
+                  open={isDialogOpen}
+                  onOpenChange={setIsDialogOpen}
+                  ticket={ticket}
+                  templateType={selectedTemplateType}
+                  onUpdate={onUpdate}
+                />
               </div>
 
             </div>
