@@ -134,15 +134,15 @@ const getLanguage = (ticket) => ticket?.disclaimer_language || 'sv';
 const textTemplates = {
   costProposal: {
     sv: (ticket, amount) =>
-      `Hej ${ticket.customer_name}! Vi har ett kostnadsförslag: ${amount} kr. Svara JA för godkännande eller NEJ för att avböja.`,
+      `Hej ${ticket.customer_name}!\nÄrende #${ticket.ticket_number} (${ticket.device_type}${ticket.device_model ? ` ${ticket.device_model}` : ''}).\nDiagnos: ${ticket.diagnosis || 'Se bifogad information från butik.'}\nKostnadsförslag: ${amount} kr.\nSvara JA för godkännande eller NEJ för att avböja.`,
     en: (ticket, amount) =>
-      `Hi ${ticket.customer_name}! We have a cost proposal: ${amount} SEK. Reply YES to approve or NO to decline.`,
+      `Hi ${ticket.customer_name}!\nCase #${ticket.ticket_number} (${ticket.device_type}${ticket.device_model ? ` ${ticket.device_model}` : ''}).\nDiagnosis: ${ticket.diagnosis || 'See detailed info from the service desk.'}\nCost proposal: ${amount} SEK.\nReply YES to approve or NO to decline.`,
   },
   repairReady: {
     sv: (ticket) =>
-      `Hej ${ticket.customer_name}! Din enhet är klar för upphämtning. Välkommen!`,
+      `Hej ${ticket.customer_name}!\nDin enhet för ärende #${ticket.ticket_number} är klar för upphämtning.\n${ticket.final_cost ? `Slutlig kostnad: ${ticket.final_cost} kr.\n` : ''}${ticket.work_done_summary ? `Utförda åtgärder: ${ticket.work_done_summary}\n` : ''}Välkommen in!`,
     en: (ticket) =>
-      `Hi ${ticket.customer_name}! Your device is ready for pickup.`,
+      `Hi ${ticket.customer_name}!\nYour device for case #${ticket.ticket_number} is ready for pickup.\n${ticket.final_cost ? `Final cost: ${ticket.final_cost} SEK.\n` : ''}${ticket.work_done_summary ? `Work done: ${ticket.work_done_summary}\n` : ''}Welcome in!`,
   },
 };
 
