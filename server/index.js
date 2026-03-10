@@ -511,7 +511,7 @@ const sendDecisionClarification = async ({ ticket, channel, smsTo, emailTo }) =>
 };
 
 const loadResendReceivedEmail = async (emailId) => {
-  if (!resendClient || !emailId) return null;
+  if (!RESEND_API_KEY || !emailId) return null;
   if (resendClient?.emails?.receiving?.get) {
     const receivingResult = await resendClient.emails.receiving.get(emailId);
     if (receivingResult?.error) {
@@ -528,7 +528,19 @@ const loadResendReceivedEmail = async (emailId) => {
     return getResult?.data || null;
   }
 
-  throw new Error('No supported Resend email retrieval method found in current SDK version');
+  const response = await fetch(`https://api.resend.com/emails/receiving/${encodeURIComponent(emailId)}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Resend receiving REST failed (${response.status}): ${errorText}`);
+  }
+  const payload = await response.json();
+  return payload?.data || payload || null;
 };
 
 const textTemplates = {
@@ -1605,17 +1617,26 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
 
     const inbound = parseInboundEmailPayload(parsedPayload);
     if (inbound.provider === 'resend' && !inbound.text && inbound.emailId) {
-      try {
-        const received = await loadResendReceivedEmail(inbound.emailId);
-        inbound.text = extractInboundText(received) || inbound.text;
-        if (!inbound.text) {
-          console.warn('Resend inbound email has no extractable text body', {
-            emailId: inbound.emailId,
-            receivedKeys: received ? Object.keys(received) : [],
-          });
+      for (let attempt = 1; attempt <= 3 && !inbound.text; attempt += 1) {
+        try {
+          const received = await loadResendReceivedEmail(inbound.emailId);
+          inbound.text = extractInboundText(received) || inbound.text;
+          if (!inbound.text && attempt < 3) {
+            await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
+          }
+          if (!inbound.text && attempt === 3) {
+            console.warn('Resend inbound email has no extractable text body', {
+              emailId: inbound.emailId,
+              receivedKeys: received ? Object.keys(received) : [],
+            });
+          }
+        } catch (error) {
+          if (attempt === 3) {
+            console.error('Resend receiving fetch failed:', error);
+          } else {
+            await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
+          }
         }
-      } catch (error) {
-        console.error('Resend receiving fetch failed:', error);
       }
     }
 
