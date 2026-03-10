@@ -4,6 +4,19 @@ import { useToast } from '@/components/ui/use-toast';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
+const toE164 = (rawPhone, countryCode = '+46') => {
+  const trimmed = (rawPhone || '').trim();
+  if (!trimmed) return '';
+  if (trimmed.startsWith('+')) {
+    return `+${trimmed.replace(/[^\d]/g, '')}`;
+  }
+  const digits = trimmed.replace(/[^\d]/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('00')) return `+${digits.slice(2)}`;
+  if (digits.startsWith('0')) return `${countryCode}${digits.slice(1)}`;
+  return `${countryCode}${digits}`;
+};
+
 const apiFetch = async (path, options) => {
   const mergedHeaders = {
     'Content-Type': 'application/json',
@@ -75,7 +88,7 @@ export const useServiceTickets = () => {
       const newTicketPayload = {
         customer_name: `${ticketData.firstName} ${ticketData.lastName}`,
         customer_email: ticketData.email,
-        customer_phone: ticketData.phone,
+        customer_phone: toE164(ticketData.phone, ticketData.phoneCountryCode || '+46'),
         device_type: ticketData.deviceType,
         device_model: ticketData.deviceModel,
         issue_description: ticketData.problemDescription,

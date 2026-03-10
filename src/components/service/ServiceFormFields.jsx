@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { motion } from 'framer-motion';
 import { User, Phone, Mail, Smartphone, AlertCircle, Globe } from 'lucide-react';
+import { countryDialCodes } from '@/lib/countryDialCodes';
 
 const deviceTypes = {
     sv: ['Smartphone', 'Surfplatta', 'Bärbar dator', 'Stationär dator', 'Smartwatch', 'Hörlurar', 'Spelkonsol', 'TV', 'Annat'],
@@ -82,7 +83,23 @@ export function ServiceFormFields({ formData, handleInputChange, language, setLa
           </div>
           <div className="space-y-2">
             <Label htmlFor="phone" className="text-gray-700 flex items-center gap-2"><Phone className="h-4 w-4 text-gray-500" />{t.customerInfo.phone} *</Label>
-            <Input id="phone" name="phone" type="tel" value={formData.phone} onChange={handleInputChange} className="bg-gray-50 border-gray-300 text-gray-900 placeholder:text-gray-400" placeholder={t.customerInfo.phonePlaceholder} required />
+            <div className="flex gap-2">
+              <Select
+                name="phoneCountryCode"
+                value={formData.phoneCountryCode || '+46'}
+                onValueChange={(value) => handleInputChange({ target: { name: 'phoneCountryCode', value } })}
+              >
+                <SelectTrigger className="w-[130px] bg-gray-50 border-gray-300 text-gray-900">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {countryDialCodes.map((item) => (
+                    <SelectItem key={item.code} value={item.code}>{item.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input id="phone" name="phone" type="tel" value={formData.phone} onChange={handleInputChange} className="bg-gray-50 border-gray-300 text-gray-900 placeholder:text-gray-400" placeholder={t.customerInfo.phonePlaceholder} required />
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="email" className="text-gray-700 flex items-center gap-2"><Mail className="h-4 w-4 text-gray-500" />{t.customerInfo.email} *</Label>

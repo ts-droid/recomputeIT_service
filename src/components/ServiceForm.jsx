@@ -12,6 +12,7 @@ import { formTranslations } from '@/lib/formTranslations';
 const initialFormData = {
   firstName: '',
   lastName: '',
+  phoneCountryCode: '+46',
   phone: '',
   email: '',
   deviceType: '',

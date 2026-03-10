@@ -14,6 +14,7 @@ import { DisclaimerDialog } from '@/components/DisclaimerDialog';
 import { downloadServiceTicketPdf, printDocuments } from '@/lib/print';
 import { formTranslations } from '@/lib/formTranslations';
 import { getDisplayVersion } from '@/lib/version';
+import { countryDialCodes } from '@/lib/countryDialCodes';
 
 const APP_VERSION = getDisplayVersion();
 
@@ -60,6 +61,7 @@ export default function PublicRegistrationPage() {
   const [formData, setFormData] = useState({
     customer_name: '',
     customer_lastname: '',
+    customer_phone_country_code: '+46',
     customer_email: '',
     customer_phone: '',
     device_type: '',
@@ -121,6 +123,7 @@ export default function PublicRegistrationPage() {
         lastName: formData.customer_lastname,
         email: formData.customer_email,
         phone: formData.customer_phone,
+        phoneCountryCode: formData.customer_phone_country_code,
         deviceType: formData.device_type,
         deviceModel: formData.device_model,
         problemDescription: formData.issue_description,
@@ -141,7 +144,7 @@ export default function PublicRegistrationPage() {
       });
       
       setFormData({
-        customer_name: '', customer_lastname: '', customer_email: '', customer_phone: '',
+        customer_name: '', customer_lastname: '', customer_phone_country_code: '+46', customer_email: '', customer_phone: '',
         device_type: '', device_model: '', issue_description: '', additional_notes: '',
       });
       setLanguage('sv');
@@ -206,7 +209,22 @@ export default function PublicRegistrationPage() {
                 </div>
                 <div>
                   <Label htmlFor="customer_phone">{t.customerInfo.phone} *</Label>
-                  <Input id="customer_phone" name="customer_phone" value={formData.customer_phone} onChange={handleInputChange} placeholder={t.customerInfo.phonePlaceholder} />
+                  <div className="flex gap-2">
+                    <Select
+                      value={formData.customer_phone_country_code}
+                      onValueChange={(value) => handleSelectChange('customer_phone_country_code', value)}
+                    >
+                      <SelectTrigger className="w-[130px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {countryDialCodes.map((item) => (
+                          <SelectItem key={item.code} value={item.code}>{item.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input id="customer_phone" name="customer_phone" value={formData.customer_phone} onChange={handleInputChange} placeholder={t.customerInfo.phonePlaceholder} />
+                  </div>
                 </div>
                 <div>
                   <Label htmlFor="customer_email">{t.customerInfo.email} *</Label>
