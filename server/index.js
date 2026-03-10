@@ -159,12 +159,44 @@ const parseApprovalDecision = (rawMessage = '') => {
 
   if (!normalized) return null;
 
-  const yesTokens = ['ja', 'yes', 'ok', 'okej', 'godkann', 'approve', 'approved', 'y'];
-  const noTokens = ['nej', 'no', 'avböj', 'avboj', 'decline', 'n'];
+  const yesPatterns = [
+    /\bja\b/,
+    /\byes\b/,
+    /\byep\b/,
+    /\bok\b/,
+    /\bokej\b/,
+    /\bgodkann\w*\b/,
+    /\bapprove\w*\b/,
+    /\baccept\w*\b/,
+    /\bgo ahead\b/,
+    /\bkor\b/,
+  ];
+  const noPatterns = [
+    /\bnej\b/,
+    /\bno\b/,
+    /\bnope\b/,
+    /\bavboj\w*\b/,
+    /\bdeclin\w*\b/,
+    /\breject\w*\b/,
+    /\bcancel\w*\b/,
+    /\bstop\b/,
+  ];
 
-  const words = normalized.split(' ');
-  if (words.some((word) => yesTokens.includes(word))) return 'yes';
-  if (words.some((word) => noTokens.includes(word))) return 'no';
+  const findFirstIndex = (patterns) => {
+    let earliest = -1;
+    for (const pattern of patterns) {
+      const match = normalized.match(pattern);
+      if (!match || match.index === undefined) continue;
+      if (earliest === -1 || match.index < earliest) earliest = match.index;
+    }
+    return earliest;
+  };
+
+  const yesIndex = findFirstIndex(yesPatterns);
+  const noIndex = findFirstIndex(noPatterns);
+
+  if (yesIndex !== -1 && (noIndex === -1 || yesIndex < noIndex)) return 'yes';
+  if (noIndex !== -1 && (yesIndex === -1 || noIndex < yesIndex)) return 'no';
   return null;
 };
 
