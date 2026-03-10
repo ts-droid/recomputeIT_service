@@ -335,6 +335,37 @@ const extractInboundText = (payload) => {
   return html ? htmlToPlainText(html) : '';
 };
 
+const extractReplySnippetFromRawWebhook = (raw = '') => {
+  if (!raw || typeof raw !== 'string') return '';
+
+  const keys = [
+    'text',
+    'text_body',
+    'textBody',
+    'stripped-text',
+    'stripped_text',
+    'body-plain',
+    'body_plain',
+    'plain',
+  ];
+
+  for (const key of keys) {
+    const regex = new RegExp(`"${key}"\\s*:\\s*"([^"]{1,400})"`, 'i');
+    const match = raw.match(regex);
+    if (!match?.[1]) continue;
+    const encoded = match[1];
+    let decoded = encoded;
+    try {
+      decoded = JSON.parse(`"${encoded.replace(/"/g, '\\"')}"`);
+    } catch {
+      // fallback with raw value
+    }
+    const cleaned = decoded.trim();
+    if (cleaned) return cleaned;
+  }
+  return '';
+};
+
 const extractEmailAddress = (raw = '') => {
   if (!raw) return '';
   const match = raw.match(/<([^>]+)>/);
@@ -1629,7 +1660,14 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
       [ticket.id, 'email', 'inbound', inbound.from, inbound.to || null, inbound.subject || null, inbound.text || null, inbound.provider]
     );
 
-    const decision = parseApprovalDecision(`${inbound.subject}\n${inbound.text}`);
+    let decision = parseApprovalDecision(`${inbound.subject}\n${inbound.text}`);
+    if (!decision && !inbound.text && req.rawBody) {
+      const fallbackSnippet = extractReplySnippetFromRawWebhook(req.rawBody);
+      if (fallbackSnippet) {
+        inbound.text = fallbackSnippet;
+        decision = parseApprovalDecision(fallbackSnippet);
+      }
+    }
     if (decision === 'yes') {
       await query(
         `UPDATE service_tickets
