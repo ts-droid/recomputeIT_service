@@ -150,7 +150,33 @@ const toSmsNumber = (phone) => {
 const getLanguage = (ticket) => ticket?.disclaimer_language || 'sv';
 
 const parseApprovalDecision = (rawMessage = '') => {
-  const normalized = rawMessage
+  const message = String(rawMessage || '').trim();
+  if (!message) return null;
+
+  // Try to focus on customer's own reply, not quoted thread below.
+  const cutMarkers = [
+    '\n>',
+    '\n--',
+    '\nfrån:',
+    '\nfrom:',
+    '\non ',
+    '\nden ',
+    '\nle ',
+    '\nam ',
+    '\nel ',
+    '\nكتب ',
+    '\nwrote:',
+    '\nskrev:',
+  ];
+  const lowerMessage = message.toLowerCase();
+  let cutoff = lowerMessage.length;
+  for (const marker of cutMarkers) {
+    const idx = lowerMessage.indexOf(marker);
+    if (idx !== -1 && idx < cutoff) cutoff = idx;
+  }
+  const primary = message.slice(0, cutoff);
+
+  const normalized = primary
     .toLowerCase()
     .normalize('NFKD')
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
@@ -163,16 +189,22 @@ const parseApprovalDecision = (rawMessage = '') => {
     /\bja\b/,
     /\byes\b/,
     /\byep\b/,
+    /\byeah\b/,
+    /\byup\b/,
     /\bok\b/,
     /\bokej\b/,
+    /\bokay\b/,
     /\bgodkann\w*\b/,
     /\bapprove\w*\b/,
     /\baccept\w*\b/,
+    /\bproceed\w*\b/,
+    /\bcontinue\w*\b/,
+    /\bgo on\b/,
     /\bgo ahead\b/,
+    /\bdo it\b/,
     /\bkor\b/,
     /\bsi\b/,
     /\bsi claro\b/,
-    /\bokay\b/,
     /\bev(et)?\b/,
     /\btak\b/,
     /\bkylla\b/,
@@ -190,14 +222,23 @@ const parseApprovalDecision = (rawMessage = '') => {
     /(^|\s)تاک(\s|$)/u,
     /(^|\s)так(\s|$)/u,
     /(^|\s)да(\s|$)/u,
+    /(^|\s)موافق\w*(\s|$)/u,
+    /(^|\s)تمام(\s|$)/u,
   ];
   const noPatterns = [
     /\bnej\b/,
     /\bno\b/,
     /\bnope\b/,
+    /\bnah\b/,
     /\bavboj\w*\b/,
     /\bdeclin\w*\b/,
     /\breject\w*\b/,
+    /\bdon t approve\b/,
+    /\bdo not approve\b/,
+    /\bdon t proceed\b/,
+    /\bdo not proceed\b/,
+    /\bnot now\b/,
+    /\bnot interested\b/,
     /\bcancel\w*\b/,
     /\bstop\b/,
     /\bnon\b/,
@@ -211,6 +252,7 @@ const parseApprovalDecision = (rawMessage = '') => {
     /(^|\s)كلا(\s|$)/u,
     /(^|\s)مو(\s|$)/u,
     /(^|\s)ليس(\s|$)/u,
+    /(^|\s)غير موافق(\s|$)/u,
     /(^|\s)niet(\s|$)/u,
     /(^|\s)ні(\s|$)/u,
     /(^|\s)ніт(\s|$)/u,
