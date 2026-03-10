@@ -321,6 +321,12 @@ app.post('/api/tickets', requireAuth, async (req, res) => {
     if (!issue_description?.toString().trim()) missingFields.push('issue_description');
 
     if (missingFields.length > 0) {
+      console.warn('POST /api/tickets validation failed:', {
+        contentType: req.headers['content-type'],
+        bodyKeys: Object.keys(req.body || {}),
+        body: req.body,
+        missingFields,
+      });
       return res.status(400).json({
         error: 'Saknar obligatoriska fält.',
         details: `Missing required fields: ${missingFields.join(', ')}`,
