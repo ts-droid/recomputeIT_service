@@ -211,6 +211,54 @@ const firstString = (obj, paths) => {
   return '';
 };
 
+const htmlToPlainText = (html = '') =>
+  html
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/\s+\n/g, '\n')
+    .replace(/\n\s+/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+const extractInboundText = (payload) => {
+  if (!payload) return '';
+  const directText = firstString(payload, [
+    'data.text',
+    'data.text_body',
+    'data.textBody',
+    'data.plain',
+    'text',
+    'text_body',
+    'textBody',
+    'body',
+    'message.text',
+    'gmail.text',
+    'plain',
+    'content.text',
+    'email.text',
+    'email.text_body',
+  ]);
+  if (directText) return directText;
+
+  const html = firstString(payload, [
+    'data.html',
+    'data.html_body',
+    'data.htmlBody',
+    'html',
+    'html_body',
+    'htmlBody',
+    'content.html',
+    'email.html',
+    'email.html_body',
+  ]);
+  return html ? htmlToPlainText(html) : '';
+};
+
 const extractEmailAddress = (raw = '') => {
   if (!raw) return '';
   const match = raw.match(/<([^>]+)>/);
@@ -240,14 +288,7 @@ const parseInboundEmailPayload = (body) => {
     'message.subject',
     'gmail.subject',
   ]);
-  const text = firstString(body, [
-    'data.text',
-    'text',
-    'body',
-    'message.text',
-    'gmail.text',
-    'plain',
-  ]);
+  const text = extractInboundText(body);
   const to = firstString(body, [
     'data.to',
     'to',
@@ -1338,8 +1379,13 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
     if (inbound.provider === 'resend' && !inbound.text && inbound.emailId) {
       try {
         const received = await loadResendReceivedEmail(inbound.emailId);
-        inbound.text =
-          firstString(received, ['text', 'data.text', 'html', 'data.html']) || inbound.text;
+        inbound.text = extractInboundText(received) || inbound.text;
+        if (!inbound.text) {
+          console.warn('Resend inbound email has no extractable text body', {
+            emailId: inbound.emailId,
+            receivedKeys: received ? Object.keys(received) : [],
+          });
+        }
       } catch (error) {
         console.error('Resend receiving fetch failed:', error);
       }
