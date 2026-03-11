@@ -1099,6 +1099,17 @@ const appendUniqueBlock = (text = '', block = '') => {
   return `${trimmedText}\n\n${trimmedBlock}`.trim();
 };
 
+const renderMessageSettingTemplate = (template = '', variables = {}) => {
+  const input = String(template || '');
+  if (!input) return '';
+
+  return input.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, key) => {
+    const value = variables[key];
+    if (value === null || value === undefined) return '';
+    return String(value);
+  });
+};
+
 const localizeTicketFreeText = async (ticket, language, options = {}) => {
   if (!ticket || !language || language === 'sv') return ticket;
   const { strict = false } = options;
@@ -1120,6 +1131,16 @@ const buildNotificationPreview = async ({ templateType, ticket, language, settin
   const activeSettings = mergeMessageSettings(settings || {});
   const emailFooter = await getLocalizedSetting(activeSettings.email_footer_by_lang, language);
   const smsFooter = await getLocalizedSetting(activeSettings.sms_footer_by_lang, language);
+  const commonVariables = {
+    customer_name: localizedTicket.customer_name || '',
+    ticket_number: localizedTicket.ticket_number || '',
+    device_type: localizedTicket.device_type || '',
+    device_model: localizedTicket.device_model || '',
+    diagnosis: localizedTicket.diagnosis || '',
+    work_done: localizedTicket.work_done_summary || '',
+    amount: localizedTicket.final_cost || '',
+    final_cost: localizedTicket.final_cost || '',
+  };
 
   if (templateType === 'kostnadsforslag') {
     const amount = ticket.final_cost || '—';
@@ -1132,7 +1153,8 @@ const buildNotificationPreview = async ({ templateType, ticket, language, settin
       emailTemplates.costProposal.sv(localizedTicket, amount);
     const subject = await translateIfNeeded(template.subject, language);
     let body = await translateIfNeeded(template.body, language);
-    body = appendUniqueBlock(body, await getLocalizedSetting(activeSettings.cost_prompt_by_lang, language));
+    const localizedCostPrompt = await getLocalizedSetting(activeSettings.cost_prompt_by_lang, language);
+    body = appendUniqueBlock(body, renderMessageSettingTemplate(localizedCostPrompt, commonVariables));
     body = appendUniqueBlock(body, emailFooter);
     body = appendReplyGuidance(body, language, replyToken);
     sms = appendUniqueBlock(sms, smsFooter);
@@ -1148,7 +1170,8 @@ const buildNotificationPreview = async ({ templateType, ticket, language, settin
     emailTemplates.repairReady.sv(localizedTicket);
   const subject = await translateIfNeeded(template.subject, language);
   let body = await translateIfNeeded(template.body, language);
-  body = appendUniqueBlock(body, await getLocalizedSetting(activeSettings.ready_prompt_by_lang, language));
+  const localizedReadyPrompt = await getLocalizedSetting(activeSettings.ready_prompt_by_lang, language);
+  body = appendUniqueBlock(body, renderMessageSettingTemplate(localizedReadyPrompt, commonVariables));
   body = appendUniqueBlock(body, emailFooter);
   body = appendReplyGuidance(body, language, replyToken);
   sms = appendUniqueBlock(sms, smsFooter);

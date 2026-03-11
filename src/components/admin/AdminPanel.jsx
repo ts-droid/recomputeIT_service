@@ -419,7 +419,10 @@ export function AdminPanel() {
 
             <div className="space-y-6">
               <div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-3">Prompt: Kostnadsförslag</h3>
+                <h3 className="text-lg font-semibold text-gray-800 mb-1">Standardtext: Kostnadsförslag</h3>
+                <p className="text-xs text-gray-500 mb-3">
+                  Du kan använda variabler: <code>{'{{diagnosis}}'}</code>, <code>{'{{amount}}'}</code>, <code>{'{{ticket_number}}'}</code>, <code>{'{{customer_name}}'}</code>.
+                </p>
                 <div className="space-y-3 max-h-[360px] overflow-y-auto pr-2">
                   {LANGUAGE_OPTIONS.map((lang) => (
                     <div key={`cost-prompt-${lang.code}`}>
@@ -434,7 +437,10 @@ export function AdminPanel() {
                 </div>
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-3">Prompt: Reparation klar</h3>
+                <h3 className="text-lg font-semibold text-gray-800 mb-1">Standardtext: Reparation klar</h3>
+                <p className="text-xs text-gray-500 mb-3">
+                  Du kan använda variabler: <code>{'{{work_done}}'}</code>, <code>{'{{final_cost}}'}</code>, <code>{'{{ticket_number}}'}</code>, <code>{'{{customer_name}}'}</code>.
+                </p>
                 <div className="space-y-3 max-h-[360px] overflow-y-auto pr-2">
                   {LANGUAGE_OPTIONS.map((lang) => (
                     <div key={`ready-prompt-${lang.code}`}>
