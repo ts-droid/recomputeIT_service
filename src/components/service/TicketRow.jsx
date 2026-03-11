@@ -50,6 +50,37 @@ const channelLabel = (channel) => {
   return channel;
 };
 
+const cleanChatBody = (body = '') => {
+  const text = String(body || '').replace(/\r/g, '').trim();
+  if (!text) return '';
+
+  const lines = text.split('\n');
+  const cleaned = [];
+
+  for (const originalLine of lines) {
+    const line = originalLine.trimEnd();
+    const trimmed = line.trim();
+    const lower = trimmed.toLowerCase();
+
+    if (!trimmed) {
+      cleaned.push(line);
+      continue;
+    }
+
+    if (trimmed.startsWith('>')) break;
+    if (/^on .+wrote:$/i.test(trimmed)) break;
+    if (/^den .+skrev:$/i.test(trimmed)) break;
+    if (/^(from:|från:|sent:|skickat:|to:|till:|subject:|ämne:)/i.test(trimmed)) break;
+    if (lower.includes('recompute_reply_start')) break;
+    if (lower.includes('svara ovanför denna linje')) break;
+    if (lower.includes('reply above this line')) break;
+
+    cleaned.push(line);
+  }
+
+  return cleaned.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+};
+
 export const TicketRow = ({ ticket, onUpdate }) => {
   const { role, token } = useSupabaseAuth();
   const canEdit = role !== 'base';
@@ -466,7 +497,7 @@ export const TicketRow = ({ ticket, onUpdate }) => {
                             {msg.direction === 'outbound' ? 'Ni' : customerFirstName} · {channelLabel(msg.channel)}
                           </p>
                           {msg.subject && <p className="text-gray-700 mt-1 break-words">{msg.subject}</p>}
-                          {msg.body && <p className="text-gray-700 mt-1 break-words whitespace-pre-wrap">{msg.body}</p>}
+                          {msg.body && <p className="text-gray-700 mt-1 break-words whitespace-pre-wrap">{cleanChatBody(msg.body) || msg.body}</p>}
                           <p className="text-gray-500 mt-2 text-[11px]">
                             {new Date(msg.created_at).toLocaleString('sv-SE')}
                             {msg.sender_user ? ` · ${msg.sender_user}` : ''}
@@ -711,7 +742,7 @@ export const TicketRow = ({ ticket, onUpdate }) => {
               )}
               <div>
                 <p className="font-semibold text-gray-800">Text</p>
-                <p className="mt-1 whitespace-pre-wrap break-words">{selectedMessage.body || '(Ingen brödtext mottagen i webhook)'}</p>
+                <p className="mt-1 whitespace-pre-wrap break-words">{cleanChatBody(selectedMessage.body) || selectedMessage.body || '(Ingen brödtext mottagen i webhook)'}</p>
               </div>
               {selectedMessage.parse_confidence && (
                 <p className="text-xs text-gray-500">

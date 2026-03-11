@@ -259,12 +259,41 @@ const extractTopReply = (rawMessage = '') => {
   return { text: message, method: 'fallback_full', confidence: 'low', replyToken: null };
 };
 
+const cleanVisibleReplyText = (raw = '') => {
+  const input = String(raw || '').replace(/\r/g, '').trim();
+  if (!input) return '';
+
+  const lines = input.split('\n');
+  const cleaned = [];
+
+  for (const originalLine of lines) {
+    const line = originalLine.trimEnd();
+    const trimmed = line.trim();
+    const lower = trimmed.toLowerCase();
+
+    if (REPLY_TOKEN_REGEX.test(trimmed)) break;
+    if (EMAIL_REPLY_MARKERS.includes(lower)) break;
+    if (/^---\s*recompute[_-]?reply[_-]?start/i.test(trimmed)) break;
+    if (/^[-_]{2,}\s*(svara ovanf[oö]r denna linje|reply above this line)\s*[-_]{2,}$/i.test(trimmed)) break;
+    if (QUOTE_HEADER_REGEX.test(`\n${trimmed}`)) break;
+    if (/^(från:|from:|skickat:|sent:|till:|to:|ämne:|subject:)/i.test(trimmed)) break;
+    if (trimmed.startsWith('>')) break;
+    if (/^[-_]{2,}\s*(original message|ursprungligt meddelande|forwarded message)/i.test(trimmed)) break;
+
+    cleaned.push(line);
+  }
+
+  return cleaned.join('\n').trim();
+};
+
 const extractTopReplyText = (rawMessage = '') => {
-  return extractTopReply(rawMessage).text;
+  const extracted = extractTopReply(rawMessage).text;
+  const cleaned = cleanVisibleReplyText(extracted);
+  return cleaned || extracted;
 };
 
 const parseApprovalDecision = (rawMessage = '') => {
-  const message = extractTopReplyText(rawMessage);
+  const message = cleanVisibleReplyText(extractTopReplyText(rawMessage));
   if (!message) return null;
 
   // Try to focus on customer's own reply, not quoted thread below.
@@ -2351,7 +2380,8 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
 
     const rawInboundText = inbound.text && typeof inbound.text === 'string' ? inbound.text : '';
     const extractedReply = extractTopReply(rawInboundText || inbound.subject || '');
-    const inboundReplyText = extractedReply.text || (inbound.subject || '');
+    const cleanedReplyText = cleanVisibleReplyText(extractedReply.text || '');
+    const inboundReplyText = cleanedReplyText || extractedReply.text || (inbound.subject || '');
     const inboundReplyWithSwedish =
       inboundReplyText && typeof inboundReplyText === 'string'
         ? await maybeAppendSwedishTranslation(ticket, inboundReplyText)
