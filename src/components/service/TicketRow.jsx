@@ -50,6 +50,30 @@ const channelLabel = (channel) => {
   return channel;
 };
 
+const formatActionChecklist = (text = '') => {
+  const raw = String(text || '').trim();
+  if (!raw) return '';
+  const lines = raw
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .flatMap((line) =>
+      line
+        .split(/(?<=[.!?])\s+/)
+        .map((part) => part.trim())
+        .filter(Boolean)
+    );
+
+  const deduped = [];
+  for (const line of lines) {
+    const normalized = line.toLowerCase();
+    if (!deduped.some((item) => item.toLowerCase() === normalized)) {
+      deduped.push(line.replace(/^[-*•]\s*/, ''));
+    }
+  }
+  return deduped.map((item) => `- ${item}`).join('\n');
+};
+
 const cleanChatBody = (body = '') => {
   const text = String(body || '').replace(/\r/g, '').trim();
   if (!text) return '';
@@ -254,11 +278,12 @@ export const TicketRow = ({ ticket, onUpdate }) => {
 
     if (checked && currentDiagnosis) {
         toast({ title: "Godkänner...", description: "Kopierar information och uppdaterar ärendet." });
+        const copiedWorkDone = formatActionChecklist(currentDiagnosis) || currentDiagnosis;
 
         const updates = {
             cost_proposal_approved: true,
             status: newStatus,
-            work_done_summary: currentDiagnosis,
+            work_done_summary: copiedWorkDone,
             final_cost: finalCost,
             diagnosis: null,
         };
@@ -332,27 +357,24 @@ export const TicketRow = ({ ticket, onUpdate }) => {
     const language = ticket.disclaimer_language || 'sv';
     const ticketWithFinalCost = { ...ticket, final_cost: finalCost, work_done_summary: workDoneSummary };
     
-    if (language === 'sv') {
-        printFinalReceipt(ticketWithFinalCost, workDoneSummary, language);
-        onUpdate(ticket.id, { status: 'Avslutad' });
-        toast({
-            title: "Ärende avslutat!",
-            description: `Kvitto för ärende #${ticket.ticket_number} har skapats.`,
-        });
-        return;
-    }
-    
     setIsProcessing(true);
     toast({ title: "Skapar kvitto...", description: "Förbereder slutgiltigt kvitto." });
 
     try {
-      printFinalReceipt({ ...ticketWithFinalCost, work_done_summary: workDoneSummary }, workDoneSummary, language);
-      
-      onUpdate(ticket.id, { status: 'Avslutad', work_done_summary: workDoneSummary });
+      const didOpenPrint = await printFinalReceipt(
+        { ...ticketWithFinalCost, work_done_summary: workDoneSummary },
+        workDoneSummary,
+        language
+      );
+      if (!didOpenPrint) {
+        throw new Error('Utskriftsfönster blockerades.');
+      }
+
+      await onUpdate(ticket.id, { status: 'Avslutad', work_done_summary: workDoneSummary });
 
       toast({
         title: "Ärende avslutat!",
-        description: `Kvitto för ärende #${ticket.ticket_number} har skapats.`,
+        description: `Kvitto visat och ärende #${ticket.ticket_number} markerat som avslutat.`,
       });
 
     } catch (error) {

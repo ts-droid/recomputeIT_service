@@ -29,6 +29,8 @@ const printTranslations = {
     finalCost: 'Slutlig kostnad',
     currency: 'kr',
     rightsReserved: 'Alla rättigheter förbehållna',
+    notCashReceiptNotice:
+      'Detta är inget kassakvitto, endast underlag för betalning. Spara även kassakvitto.',
   },
   en: {
     serviceReceipt: 'SERVICE RECEIPT',
@@ -60,6 +62,8 @@ const printTranslations = {
     finalCost: 'Final Cost',
     currency: 'SEK',
     rightsReserved: 'All rights reserved',
+    notCashReceiptNotice:
+      'This is not a cash register receipt, only payment documentation. Please also save the cash register receipt.',
   },
   // Add other languages as needed
 };
@@ -189,6 +193,7 @@ export const printDocuments = (ticket, language = 'sv') => {
 export const printFinalReceipt = (ticket, enhancedSummary, language = 'sv') => {
   const t = printTranslations[language] || printTranslations.sv;
   const printWindow = window.open('', '_blank');
+  if (!printWindow) return Promise.resolve(false);
   const currentDate = new Date().toLocaleDateString(language === 'sv' ? 'sv-SE' : 'en-CA');
   const finalCostValue = ticket.final_cost || 'Ej angiven';
 
@@ -248,6 +253,7 @@ export const printFinalReceipt = (ticket, enhancedSummary, language = 'sv') => {
             </div>
         </div>
         <div class="footer">
+          <p><strong>${t.notCashReceiptNotice}</strong></p>
           <p>re:Compute-IT | ${t.rightsReserved}</p>
         </div>
       </div>
@@ -257,10 +263,31 @@ export const printFinalReceipt = (ticket, enhancedSummary, language = 'sv') => {
 
   printWindow.document.close();
   printWindow.focus();
-  setTimeout(() => {
-    printWindow.print();
-    printWindow.close();
-  }, 250);
+  return new Promise((resolve) => {
+    let resolved = false;
+    const done = (result) => {
+      if (resolved) return;
+      resolved = true;
+      try {
+        printWindow.close();
+      } catch (_) {}
+      resolve(result);
+    };
+
+    const afterPrintHandler = () => done(true);
+    printWindow.onafterprint = afterPrintHandler;
+
+    setTimeout(() => {
+      try {
+        printWindow.print();
+      } catch (_) {
+        done(false);
+      }
+    }, 250);
+
+    // Fallback for browsers that do not trigger onafterprint reliably
+    setTimeout(() => done(true), 4000);
+  });
 };
 
 const toAscii = (value) =>
