@@ -906,7 +906,8 @@ const getAdminMessageSettings = async () => {
   return mergeMessageSettings(rows[0]?.value_json || {});
 };
 
-const fillMissingTranslations = async (byLang = {}) => {
+const fillMissingTranslations = async (byLang = {}, options = {}) => {
+  const { overwriteExisting = false } = options;
   const sourceSv = byLang?.sv?.toString().trim() || '';
   const sourceEn = byLang?.en?.toString().trim() || '';
   const sourceText = sourceSv || sourceEn || '';
@@ -914,8 +915,9 @@ const fillMissingTranslations = async (byLang = {}) => {
 
   const next = { ...byLang };
   for (const lang of SUPPORTED_LANGUAGES) {
-    const existing = next?.[lang]?.toString().trim();
-    if (existing) continue;
+    if (lang === 'sv' || lang === 'en') continue;
+    const existing = next?.[lang]?.toString().trim() || '';
+    if (!overwriteExisting && existing) continue;
     next[lang] = await translateIfNeeded(sourceText, lang, { allowEnglish: true });
   }
   return next;
@@ -925,10 +927,18 @@ const autoTranslateMessageSettings = async (settings = {}) => {
   const normalized = mergeMessageSettings(settings);
   return {
     ...normalized,
-    email_footer_by_lang: await fillMissingTranslations(normalized.email_footer_by_lang),
-    sms_footer_by_lang: await fillMissingTranslations(normalized.sms_footer_by_lang),
-    cost_prompt_by_lang: await fillMissingTranslations(normalized.cost_prompt_by_lang),
-    ready_prompt_by_lang: await fillMissingTranslations(normalized.ready_prompt_by_lang),
+    email_footer_by_lang: await fillMissingTranslations(normalized.email_footer_by_lang, {
+      overwriteExisting: true,
+    }),
+    sms_footer_by_lang: await fillMissingTranslations(normalized.sms_footer_by_lang, {
+      overwriteExisting: true,
+    }),
+    cost_prompt_by_lang: await fillMissingTranslations(normalized.cost_prompt_by_lang, {
+      overwriteExisting: true,
+    }),
+    ready_prompt_by_lang: await fillMissingTranslations(normalized.ready_prompt_by_lang, {
+      overwriteExisting: true,
+    }),
   };
 };
 
