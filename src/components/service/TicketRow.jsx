@@ -72,6 +72,8 @@ export const TicketRow = ({ ticket, onUpdate }) => {
   const { toast } = useToast();
   const customerDecision = decisionMap[ticket.last_customer_decision] || null;
   const hasNewCustomerMessage = Boolean(ticket.has_new_customer_message);
+  const canCloseWithoutAction =
+    ticket.status === 'Kostnadsförslag nekat' || ticket.last_customer_decision === 'declined';
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
   const sortedMessages = useMemo(
     () => [...messages].sort((a, b) => new Date(a.created_at) - new Date(b.created_at)),
@@ -325,6 +327,34 @@ export const TicketRow = ({ ticket, onUpdate }) => {
         title: "Ett fel uppstod",
         description: "Kunde inte skapa kvitto. Försök igen.",
         variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleCloseWithoutAction = async () => {
+    if (!canEdit) return;
+    const confirmed = window.confirm(
+      `Avsluta ärende #${ticket.ticket_number} utan åtgärd?\nDetta markerar ärendet som Avslutad.`
+    );
+    if (!confirmed) return;
+
+    setIsProcessing(true);
+    try {
+      await onUpdate(ticket.id, {
+        status: 'Avslutad',
+        work_done_summary: workDoneSummary || 'Avslutad utan åtgärd (kostnadsförslag nekat).',
+      });
+      toast({
+        title: 'Ärende avslutat',
+        description: `Ärende #${ticket.ticket_number} avslutades utan åtgärd.`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Kunde inte avsluta ärendet',
+        description: error?.message || 'Försök igen.',
+        variant: 'destructive',
       });
     } finally {
       setIsProcessing(false);
@@ -621,6 +651,15 @@ export const TicketRow = ({ ticket, onUpdate }) => {
                     <p className="text-xs text-center text-gray-500 mt-2 flex items-center justify-center gap-1">
                       <Sparkles size={12} className="text-purple-500" /> Skapar ett tydligt kvitto för kunden.
                     </p>
+                    {canCloseWithoutAction && ticket.status !== 'Avslutad' && (
+                      <Button
+                        onClick={handleCloseWithoutAction}
+                        disabled={isProcessing || !canEdit}
+                        className="w-full bg-red-600 hover:bg-red-700 text-white"
+                      >
+                        Avsluta utan åtgärd
+                      </Button>
+                    )}
                     <div className="flex gap-3">
                       <Button 
                         onClick={handleReprint} 
