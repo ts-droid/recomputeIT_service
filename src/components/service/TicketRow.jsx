@@ -111,7 +111,10 @@ export const TicketRow = ({ ticket, onUpdate }) => {
     [messages]
   );
   const chatMessages = useMemo(
-    () => sortedMessages.filter((msg) => msg.direction === 'inbound'),
+    () =>
+      sortedMessages.filter(
+        (msg) => (msg.body && String(msg.body).trim()) || (msg.subject && String(msg.subject).trim())
+      ),
     [sortedMessages]
   );
   const customerFirstName = useMemo(() => {
