@@ -638,92 +638,6 @@ const extractTicketNumber = (subject = '', text = '') => {
   return null;
 };
 
-const sendDecisionAcknowledgement = async ({ ticket, decision, channel, smsTo, emailTo }) => {
-  const lang = getLanguage(ticket);
-  const langKey = decisionAckTemplates[decision]?.sms?.[lang] ? lang : 'sv';
-
-  if (channel === 'sms' && smsTo) {
-    const smsBody = decisionAckTemplates[decision]?.sms?.[langKey];
-    if (smsBody) {
-      await sendSms({ to: smsTo, message: smsBody });
-      await query(
-        `INSERT INTO message_logs (ticket_id, channel, direction, to_number, body, provider)
-         VALUES ($1,$2,$3,$4,$5,$6)`,
-        [ticket.id, 'sms', 'outbound', smsTo, smsBody, '46elks']
-      );
-    }
-    return;
-  }
-
-  if (channel === 'email' && emailTo) {
-    const emailTemplate = decisionAckTemplates[decision]?.email?.[langKey];
-    if (emailTemplate) {
-      await sendEmail({
-        to: emailTo,
-        subject: emailTemplate.subject,
-        body: emailTemplate.body,
-      });
-      await query(
-        `INSERT INTO message_logs (ticket_id, channel, direction, to_number, subject, body, provider)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [ticket.id, 'email', 'outbound', emailTo, emailTemplate.subject, emailTemplate.body, 'smtp']
-      );
-    }
-  }
-};
-
-const buildClarificationTemplate = async (ticket) => {
-  const lang = getLanguage(ticket);
-  const subjectSv = `Bekräfta svar för ärende #${ticket.ticket_number}`;
-  const bodySv =
-    `Hej ${ticket.customer_name},\n\n` +
-    `Vi kunde inte tolka ditt senaste svar för ärende #${ticket.ticket_number}.\n` +
-    `Svara endast med JA för att godkänna kostnadsförslaget eller NEJ för att neka.\n\n` +
-    `Tack!`;
-  const smsSv =
-    `Vi kunde inte tolka ditt svar för ärende #${ticket.ticket_number}. ` +
-    `Svara endast JA för godkänna eller NEJ för neka.`;
-
-  if (lang === 'sv') {
-    return { subject: subjectSv, body: bodySv, sms: smsSv };
-  }
-
-  const subject = await translateIfNeeded(subjectSv, lang, { allowEnglish: true });
-  const body = await translateIfNeeded(bodySv, lang, { allowEnglish: true });
-  const sms = await translateIfNeeded(smsSv, lang, { allowEnglish: true });
-  return { subject, body, sms };
-};
-
-const sendDecisionClarification = async ({ ticket, channel, smsTo, emailTo }) => {
-  const template = await buildClarificationTemplate(ticket);
-
-  if (channel === 'sms' && smsTo) {
-    await sendSms({ to: smsTo, message: template.sms });
-    await query(
-      `INSERT INTO message_logs (ticket_id, channel, direction, to_number, body, provider)
-       VALUES ($1,$2,$3,$4,$5,$6)`,
-      [ticket.id, 'sms', 'outbound', smsTo, template.sms, '46elks']
-    );
-    return;
-  }
-
-  if (channel === 'email' && emailTo) {
-    const language = getLanguage(ticket);
-    const replyToken = generateReplyToken();
-    const bodyWithMarker = appendReplyGuidance(template.body, language, replyToken);
-    await sendEmail({
-      to: emailTo,
-      subject: template.subject,
-      body: bodyWithMarker,
-    });
-    await query(
-      `INSERT INTO message_logs (ticket_id, channel, direction, to_number, subject, body, reply_token, provider)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [ticket.id, 'email', 'outbound', emailTo, template.subject, bodyWithMarker, replyToken, 'smtp']
-    );
-  }
-};
-
 const loadResendReceivedEmail = async (emailId) => {
   if (!RESEND_API_KEY || !emailId) return null;
   const errors = [];
@@ -822,41 +736,6 @@ const emailTemplates = {
   },
 };
 
-const decisionAckTemplates = {
-  yes: {
-    sms: {
-      sv: 'Tack för förtroendet. Vi återkommer så snart reparationen är klar.',
-      en: 'Thanks for your approval. We will contact you as soon as the repair is complete.',
-    },
-    email: {
-      sv: {
-        subject: 'Tack för ditt godkännande',
-        body: 'Tack för förtroendet. Vi återkommer så snart reparationen är klar.',
-      },
-      en: {
-        subject: 'Thank you for your approval',
-        body: 'Thanks for your approval. We will contact you as soon as the repair is complete.',
-      },
-    },
-  },
-  no: {
-    sms: {
-      sv: 'Tråkigt att höra. Har du frågor, kontakta oss på kontakt@recompute.it eller 016-5416700. Vi förbehåller oss rätten att kassera din inlämnade produkt om den inte upphämtas inom 7 dagar från nekat kostnadsförslag.',
-      en: 'Sorry to hear that. Questions? Contact us at kontakt@recompute.it or 016-5416700. We reserve the right to discard uncollected products 7 days after a declined quote.',
-    },
-    email: {
-      sv: {
-        subject: 'Information om nekat kostnadsförslag',
-        body: 'Tråkigt att höra.\n\nHar du frågor kan du kontakta oss på kontakt@recompute.it eller 016-5416700.\n\nVi förbehåller oss rätten att kassera din inlämnade produkt om den inte upphämtas inom 7 dagar från nekat kostnadsförslag.',
-      },
-      en: {
-        subject: 'Information about declined quote',
-        body: 'Sorry to hear that.\n\nIf you have questions, contact us at kontakt@recompute.it or 016-5416700.\n\nWe reserve the right to discard uncollected products 7 days after a declined quote.',
-      },
-    },
-  },
-};
-
 const DEFAULT_MESSAGE_SETTINGS = {
   email_footer_by_lang: {
     sv: 'Vänliga hälsningar\nre:Compute-IT',
@@ -873,6 +752,42 @@ const DEFAULT_MESSAGE_SETTINGS = {
   ready_prompt_by_lang: {
     sv: 'Har du frågor, svara på detta mail eller SMS.',
     en: 'If you have questions, reply to this email or SMS.',
+  },
+  decision_approved_sms_by_lang: {
+    sv: 'Tack för förtroendet. Vi återkommer så snart reparationen är klar.',
+    en: 'Thanks for your approval. We will contact you as soon as the repair is complete.',
+  },
+  decision_approved_email_subject_by_lang: {
+    sv: 'Tack för ditt godkännande',
+    en: 'Thank you for your approval',
+  },
+  decision_approved_email_body_by_lang: {
+    sv: 'Tack för förtroendet. Vi återkommer så snart reparationen är klar.',
+    en: 'Thanks for your approval. We will contact you as soon as the repair is complete.',
+  },
+  decision_declined_sms_by_lang: {
+    sv: 'Tråkigt att höra. Har du frågor, kontakta oss på kontakt@recompute.it eller 016-5416700. Vi förbehåller oss rätten att kassera din inlämnade produkt om den inte upphämtas inom 7 dagar från nekat kostnadsförslag.',
+    en: 'Sorry to hear that. Questions? Contact us at kontakt@recompute.it or 016-5416700. We reserve the right to discard uncollected products 7 days after a declined quote.',
+  },
+  decision_declined_email_subject_by_lang: {
+    sv: 'Information om nekat kostnadsförslag',
+    en: 'Information about declined quote',
+  },
+  decision_declined_email_body_by_lang: {
+    sv: 'Tråkigt att höra.\n\nHar du frågor kan du kontakta oss på kontakt@recompute.it eller 016-5416700.\n\nVi förbehåller oss rätten att kassera din inlämnade produkt om den inte upphämtas inom 7 dagar från nekat kostnadsförslag.',
+    en: 'Sorry to hear that.\n\nIf you have questions, contact us at kontakt@recompute.it or 016-5416700.\n\nWe reserve the right to discard uncollected products 7 days after a declined quote.',
+  },
+  decision_unclear_sms_by_lang: {
+    sv: 'Vi kunde inte tolka ditt svar för ärende #{{ticket_number}}. Svara endast JA för godkänna eller NEJ för neka.',
+    en: 'We could not interpret your response for case #{{ticket_number}}. Please reply with YES to approve or NO to decline.',
+  },
+  decision_unclear_email_subject_by_lang: {
+    sv: 'Bekräfta svar för ärende #{{ticket_number}}',
+    en: 'Please confirm your response for case #{{ticket_number}}',
+  },
+  decision_unclear_email_body_by_lang: {
+    sv: 'Hej {{customer_name}},\n\nVi kunde inte tolka ditt senaste svar för ärende #{{ticket_number}}.\nSvara endast med JA för att godkänna kostnadsförslaget eller NEJ för att neka.\n\nTack!',
+    en: 'Hi {{customer_name}},\n\nWe could not interpret your latest response for case #{{ticket_number}}.\nPlease reply with YES to approve the quote or NO to decline.\n\nThank you!',
   },
   ai_reply_assistant_prompt:
     'Du hjälper servicepersonal att svara kunder kort, tydligt och professionellt. Föreslå ett konkret svar som kan skickas direkt.',
@@ -892,6 +807,15 @@ const mergeMessageSettings = (raw) => {
     sms_footer_by_lang: mergeByLang('sms_footer_by_lang'),
     cost_prompt_by_lang: mergeByLang('cost_prompt_by_lang'),
     ready_prompt_by_lang: mergeByLang('ready_prompt_by_lang'),
+    decision_approved_sms_by_lang: mergeByLang('decision_approved_sms_by_lang'),
+    decision_approved_email_subject_by_lang: mergeByLang('decision_approved_email_subject_by_lang'),
+    decision_approved_email_body_by_lang: mergeByLang('decision_approved_email_body_by_lang'),
+    decision_declined_sms_by_lang: mergeByLang('decision_declined_sms_by_lang'),
+    decision_declined_email_subject_by_lang: mergeByLang('decision_declined_email_subject_by_lang'),
+    decision_declined_email_body_by_lang: mergeByLang('decision_declined_email_body_by_lang'),
+    decision_unclear_sms_by_lang: mergeByLang('decision_unclear_sms_by_lang'),
+    decision_unclear_email_subject_by_lang: mergeByLang('decision_unclear_email_subject_by_lang'),
+    decision_unclear_email_body_by_lang: mergeByLang('decision_unclear_email_body_by_lang'),
     ai_reply_assistant_prompt:
       parsed?.ai_reply_assistant_prompt || DEFAULT_MESSAGE_SETTINGS.ai_reply_assistant_prompt,
     ai_message_suggestion_prompt:
@@ -939,6 +863,51 @@ const autoTranslateMessageSettings = async (settings = {}) => {
     ready_prompt_by_lang: await fillMissingTranslations(normalized.ready_prompt_by_lang, {
       overwriteExisting: true,
     }),
+    decision_approved_sms_by_lang: await fillMissingTranslations(normalized.decision_approved_sms_by_lang, {
+      overwriteExisting: true,
+    }),
+    decision_approved_email_subject_by_lang: await fillMissingTranslations(
+      normalized.decision_approved_email_subject_by_lang,
+      {
+        overwriteExisting: true,
+      }
+    ),
+    decision_approved_email_body_by_lang: await fillMissingTranslations(
+      normalized.decision_approved_email_body_by_lang,
+      {
+        overwriteExisting: true,
+      }
+    ),
+    decision_declined_sms_by_lang: await fillMissingTranslations(normalized.decision_declined_sms_by_lang, {
+      overwriteExisting: true,
+    }),
+    decision_declined_email_subject_by_lang: await fillMissingTranslations(
+      normalized.decision_declined_email_subject_by_lang,
+      {
+        overwriteExisting: true,
+      }
+    ),
+    decision_declined_email_body_by_lang: await fillMissingTranslations(
+      normalized.decision_declined_email_body_by_lang,
+      {
+        overwriteExisting: true,
+      }
+    ),
+    decision_unclear_sms_by_lang: await fillMissingTranslations(normalized.decision_unclear_sms_by_lang, {
+      overwriteExisting: true,
+    }),
+    decision_unclear_email_subject_by_lang: await fillMissingTranslations(
+      normalized.decision_unclear_email_subject_by_lang,
+      {
+        overwriteExisting: true,
+      }
+    ),
+    decision_unclear_email_body_by_lang: await fillMissingTranslations(
+      normalized.decision_unclear_email_body_by_lang,
+      {
+        overwriteExisting: true,
+      }
+    ),
   };
 };
 
@@ -1121,6 +1090,117 @@ const renderMessageSettingTemplate = (template = '', variables = {}) => {
     if (value === null || value === undefined) return '';
     return String(value);
   });
+};
+
+const buildDecisionMessageTemplate = async ({ ticket, type, settings }) => {
+  const language = getLanguage(ticket);
+  const activeSettings = mergeMessageSettings(settings || {});
+  const variables = {
+    customer_name: ticket.customer_name || '',
+    ticket_number: ticket.ticket_number || '',
+    device_type: ticket.device_type || '',
+    device_model: ticket.device_model || '',
+    amount: ticket.final_cost || '',
+    final_cost: ticket.final_cost || '',
+  };
+
+  const map = {
+    approved: {
+      sms: activeSettings.decision_approved_sms_by_lang,
+      subject: activeSettings.decision_approved_email_subject_by_lang,
+      body: activeSettings.decision_approved_email_body_by_lang,
+    },
+    declined: {
+      sms: activeSettings.decision_declined_sms_by_lang,
+      subject: activeSettings.decision_declined_email_subject_by_lang,
+      body: activeSettings.decision_declined_email_body_by_lang,
+    },
+    unclear: {
+      sms: activeSettings.decision_unclear_sms_by_lang,
+      subject: activeSettings.decision_unclear_email_subject_by_lang,
+      body: activeSettings.decision_unclear_email_body_by_lang,
+    },
+  };
+
+  const selected = map[type];
+  if (!selected) return { sms: '', subject: '', body: '' };
+
+  const smsTemplate = await getLocalizedSetting(selected.sms, language);
+  const subjectTemplate = await getLocalizedSetting(selected.subject, language);
+  const bodyTemplate = await getLocalizedSetting(selected.body, language);
+
+  return {
+    sms: renderMessageSettingTemplate(smsTemplate, variables),
+    subject: renderMessageSettingTemplate(subjectTemplate, variables),
+    body: renderMessageSettingTemplate(bodyTemplate, variables),
+  };
+};
+
+const sendDecisionAcknowledgement = async ({ ticket, decision, channel, smsTo, emailTo }) => {
+  const settings = await getAdminMessageSettings();
+  const template = await buildDecisionMessageTemplate({
+    ticket,
+    type: decision === 'yes' ? 'approved' : 'declined',
+    settings,
+  });
+
+  if (channel === 'sms' && smsTo && template.sms) {
+    await sendSms({ to: smsTo, message: template.sms });
+    await query(
+      `INSERT INTO message_logs (ticket_id, channel, direction, to_number, body, provider)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [ticket.id, 'sms', 'outbound', smsTo, template.sms, '46elks']
+    );
+    return;
+  }
+
+  if (channel === 'email' && emailTo && (template.subject || template.body)) {
+    await sendEmail({
+      to: emailTo,
+      subject: template.subject || `Ärende #${ticket.ticket_number}`,
+      body: template.body || '',
+    });
+    await query(
+      `INSERT INTO message_logs (ticket_id, channel, direction, to_number, subject, body, provider)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [ticket.id, 'email', 'outbound', emailTo, template.subject || null, template.body || null, 'smtp']
+    );
+  }
+};
+
+const sendDecisionClarification = async ({ ticket, channel, smsTo, emailTo }) => {
+  const settings = await getAdminMessageSettings();
+  const template = await buildDecisionMessageTemplate({
+    ticket,
+    type: 'unclear',
+    settings,
+  });
+
+  if (channel === 'sms' && smsTo && template.sms) {
+    await sendSms({ to: smsTo, message: template.sms });
+    await query(
+      `INSERT INTO message_logs (ticket_id, channel, direction, to_number, body, provider)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [ticket.id, 'sms', 'outbound', smsTo, template.sms, '46elks']
+    );
+    return;
+  }
+
+  if (channel === 'email' && emailTo && (template.subject || template.body)) {
+    const language = getLanguage(ticket);
+    const replyToken = generateReplyToken();
+    const bodyWithMarker = appendReplyGuidance(template.body || '', language, replyToken);
+    await sendEmail({
+      to: emailTo,
+      subject: template.subject || `Ärende #${ticket.ticket_number}`,
+      body: bodyWithMarker,
+    });
+    await query(
+      `INSERT INTO message_logs (ticket_id, channel, direction, to_number, subject, body, reply_token, provider)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [ticket.id, 'email', 'outbound', emailTo, template.subject || null, bodyWithMarker, replyToken, 'smtp']
+    );
+  }
 };
 
 const localizeTicketFreeText = async (ticket, language, options = {}) => {
