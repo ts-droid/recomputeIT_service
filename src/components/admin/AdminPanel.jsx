@@ -435,181 +435,205 @@ export function AdminPanel() {
               Fyll i svenska/engelska och låt systemet auto-översätta samt cacha översättningar.
             </p>
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-3">E-postfooter</h3>
-                <div className="space-y-3 max-h-[360px] overflow-y-auto pr-2">
-                  {LANGUAGE_OPTIONS.map((lang) => (
-                    <div key={`email-footer-${lang.code}`}>
-                      <Label className="mb-2 block">{lang.label}</Label>
-                      <Textarea
-                        value={messageSettings.email_footer_by_lang?.[lang.code] || ''}
-                        onChange={(event) => updateSettingField('email_footer_by_lang', lang.code, event.target.value)}
-                        className="min-h-[90px]"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-3">SMS-footer</h3>
-                <div className="space-y-3 max-h-[280px] overflow-y-auto pr-2">
-                  {LANGUAGE_OPTIONS.map((lang) => (
-                    <div key={`sms-footer-${lang.code}`}>
-                      <Label className="mb-2 block">{lang.label}</Label>
-                      <Input
-                        value={messageSettings.sms_footer_by_lang?.[lang.code] || ''}
-                        onChange={(event) => updateSettingField('sms_footer_by_lang', lang.code, event.target.value)}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+          <Tabs defaultValue="footers" className="w-full">
+            <TabsList className="bg-gray-100">
+              <TabsTrigger value="footers">Footers</TabsTrigger>
+              <TabsTrigger value="templates">Standardtexter</TabsTrigger>
+              <TabsTrigger value="ai">AI-prompter</TabsTrigger>
+            </TabsList>
 
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-1">Standardtext: Kostnadsförslag</h3>
-                <p className="text-xs text-gray-500 mb-3">
-                  Du kan använda variabler: <code>{'{{diagnosis}}'}</code>, <code>{'{{amount}}'}</code>, <code>{'{{ticket_number}}'}</code>, <code>{'{{customer_name}}'}</code>.
-                </p>
-                <div className="space-y-3 max-h-[360px] overflow-y-auto pr-2">
-                  {LANGUAGE_OPTIONS.map((lang) => (
-                    <div key={`cost-prompt-${lang.code}`}>
-                      <Label className="mb-2 block">{lang.label}</Label>
-                      <Textarea
-                        value={messageSettings.cost_prompt_by_lang?.[lang.code] || ''}
-                        onChange={(event) => updateSettingField('cost_prompt_by_lang', lang.code, event.target.value)}
-                        className="min-h-[90px]"
-                      />
-                    </div>
-                  ))}
+            <TabsContent value="footers" className="mt-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="border border-gray-200 rounded-xl p-4">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-3">E-postfooter</h3>
+                  <div className="space-y-3 max-h-[620px] overflow-y-auto pr-2">
+                    {LANGUAGE_OPTIONS.map((lang) => (
+                      <div key={`email-footer-${lang.code}`}>
+                        <Label className="mb-2 block">{lang.label}</Label>
+                        <Textarea
+                          value={messageSettings.email_footer_by_lang?.[lang.code] || ''}
+                          onChange={(event) => updateSettingField('email_footer_by_lang', lang.code, event.target.value)}
+                          className="min-h-[90px]"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="border border-gray-200 rounded-xl p-4">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-3">SMS-footer</h3>
+                  <div className="space-y-3 max-h-[620px] overflow-y-auto pr-2">
+                    {LANGUAGE_OPTIONS.map((lang) => (
+                      <div key={`sms-footer-${lang.code}`}>
+                        <Label className="mb-2 block">{lang.label}</Label>
+                        <Input
+                          value={messageSettings.sms_footer_by_lang?.[lang.code] || ''}
+                          onChange={(event) => updateSettingField('sms_footer_by_lang', lang.code, event.target.value)}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-1">Standardtext: Reparation klar</h3>
-                <p className="text-xs text-gray-500 mb-3">
-                  Du kan använda variabler: <code>{'{{work_done}}'}</code>, <code>{'{{final_cost}}'}</code>, <code>{'{{ticket_number}}'}</code>, <code>{'{{customer_name}}'}</code>.
-                </p>
-                <div className="space-y-3 max-h-[360px] overflow-y-auto pr-2">
-                  {LANGUAGE_OPTIONS.map((lang) => (
-                    <div key={`ready-prompt-${lang.code}`}>
-                      <Label className="mb-2 block">{lang.label}</Label>
-                      <Textarea
-                        value={messageSettings.ready_prompt_by_lang?.[lang.code] || ''}
-                        onChange={(event) => updateSettingField('ready_prompt_by_lang', lang.code, event.target.value)}
-                        className="min-h-[90px]"
-                      />
+            </TabsContent>
+
+            <TabsContent value="templates" className="mt-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="space-y-6">
+                  <div className="border border-gray-200 rounded-xl p-4">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-1">Standardtext: Kostnadsförslag</h3>
+                    <p className="text-xs text-gray-500 mb-3">
+                      Du kan använda variabler: <code>{'{{diagnosis}}'}</code>, <code>{'{{amount}}'}</code>, <code>{'{{ticket_number}}'}</code>, <code>{'{{customer_name}}'}</code>.
+                    </p>
+                    <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
+                      {LANGUAGE_OPTIONS.map((lang) => (
+                        <div key={`cost-prompt-${lang.code}`}>
+                          <Label className="mb-2 block">{lang.label}</Label>
+                          <Textarea
+                            value={messageSettings.cost_prompt_by_lang?.[lang.code] || ''}
+                            onChange={(event) => updateSettingField('cost_prompt_by_lang', lang.code, event.target.value)}
+                            className="min-h-[90px]"
+                          />
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  </div>
+
+                  <div className="border border-gray-200 rounded-xl p-4">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-1">Standardtext: Reparation klar</h3>
+                    <p className="text-xs text-gray-500 mb-3">
+                      Du kan använda variabler: <code>{'{{work_done}}'}</code>, <code>{'{{final_cost}}'}</code>, <code>{'{{ticket_number}}'}</code>, <code>{'{{customer_name}}'}</code>.
+                    </p>
+                    <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
+                      {LANGUAGE_OPTIONS.map((lang) => (
+                        <div key={`ready-prompt-${lang.code}`}>
+                          <Label className="mb-2 block">{lang.label}</Label>
+                          <Textarea
+                            value={messageSettings.ready_prompt_by_lang?.[lang.code] || ''}
+                            onChange={(event) => updateSettingField('ready_prompt_by_lang', lang.code, event.target.value)}
+                            className="min-h-[90px]"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="border border-gray-200 rounded-xl p-4">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-1">Autosvar: Kostnadsförslag godkänt</h3>
+                    <p className="text-xs text-gray-500 mb-3">
+                      Variabler: <code>{'{{customer_name}}'}</code>, <code>{'{{ticket_number}}'}</code>, <code>{'{{amount}}'}</code>.
+                    </p>
+                    <div className="space-y-3 max-h-[240px] overflow-y-auto pr-2">
+                      {LANGUAGE_OPTIONS.map((lang) => (
+                        <div key={`decision-approved-${lang.code}`} className="space-y-2">
+                          <Label className="block">{lang.label}</Label>
+                          <Input
+                            value={messageSettings.decision_approved_email_subject_by_lang?.[lang.code] || ''}
+                            onChange={(event) => updateSettingField('decision_approved_email_subject_by_lang', lang.code, event.target.value)}
+                            placeholder="E-postämne"
+                          />
+                          <Textarea
+                            value={messageSettings.decision_approved_email_body_by_lang?.[lang.code] || ''}
+                            onChange={(event) => updateSettingField('decision_approved_email_body_by_lang', lang.code, event.target.value)}
+                            className="min-h-[90px]"
+                            placeholder="E-posttext"
+                          />
+                          <Input
+                            value={messageSettings.decision_approved_sms_by_lang?.[lang.code] || ''}
+                            onChange={(event) => updateSettingField('decision_approved_sms_by_lang', lang.code, event.target.value)}
+                            placeholder="SMS-text"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="border border-gray-200 rounded-xl p-4">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-1">Autosvar: Kostnadsförslag nekat</h3>
+                    <p className="text-xs text-gray-500 mb-3">
+                      Variabler: <code>{'{{customer_name}}'}</code>, <code>{'{{ticket_number}}'}</code>, <code>{'{{amount}}'}</code>.
+                    </p>
+                    <div className="space-y-3 max-h-[240px] overflow-y-auto pr-2">
+                      {LANGUAGE_OPTIONS.map((lang) => (
+                        <div key={`decision-declined-${lang.code}`} className="space-y-2">
+                          <Label className="block">{lang.label}</Label>
+                          <Input
+                            value={messageSettings.decision_declined_email_subject_by_lang?.[lang.code] || ''}
+                            onChange={(event) => updateSettingField('decision_declined_email_subject_by_lang', lang.code, event.target.value)}
+                            placeholder="E-postämne"
+                          />
+                          <Textarea
+                            value={messageSettings.decision_declined_email_body_by_lang?.[lang.code] || ''}
+                            onChange={(event) => updateSettingField('decision_declined_email_body_by_lang', lang.code, event.target.value)}
+                            className="min-h-[90px]"
+                            placeholder="E-posttext"
+                          />
+                          <Input
+                            value={messageSettings.decision_declined_sms_by_lang?.[lang.code] || ''}
+                            onChange={(event) => updateSettingField('decision_declined_sms_by_lang', lang.code, event.target.value)}
+                            placeholder="SMS-text"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="border border-gray-200 rounded-xl p-4">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-1">Autosvar: Oklart svar</h3>
+                    <p className="text-xs text-gray-500 mb-3">
+                      Variabler: <code>{'{{customer_name}}'}</code>, <code>{'{{ticket_number}}'}</code>.
+                    </p>
+                    <div className="space-y-3 max-h-[240px] overflow-y-auto pr-2">
+                      {LANGUAGE_OPTIONS.map((lang) => (
+                        <div key={`decision-unclear-${lang.code}`} className="space-y-2">
+                          <Label className="block">{lang.label}</Label>
+                          <Input
+                            value={messageSettings.decision_unclear_email_subject_by_lang?.[lang.code] || ''}
+                            onChange={(event) => updateSettingField('decision_unclear_email_subject_by_lang', lang.code, event.target.value)}
+                            placeholder="E-postämne"
+                          />
+                          <Textarea
+                            value={messageSettings.decision_unclear_email_body_by_lang?.[lang.code] || ''}
+                            onChange={(event) => updateSettingField('decision_unclear_email_body_by_lang', lang.code, event.target.value)}
+                            className="min-h-[90px]"
+                            placeholder="E-posttext"
+                          />
+                          <Input
+                            value={messageSettings.decision_unclear_sms_by_lang?.[lang.code] || ''}
+                            onChange={(event) => updateSettingField('decision_unclear_sms_by_lang', lang.code, event.target.value)}
+                            placeholder="SMS-text"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-1">Autosvar: Kostnadsförslag godkänt</h3>
-                <p className="text-xs text-gray-500 mb-3">
-                  Variabler: <code>{'{{customer_name}}'}</code>, <code>{'{{ticket_number}}'}</code>, <code>{'{{amount}}'}</code>.
-                </p>
-                <div className="space-y-3 max-h-[320px] overflow-y-auto pr-2">
-                  {LANGUAGE_OPTIONS.map((lang) => (
-                    <div key={`decision-approved-${lang.code}`} className="space-y-2">
-                      <Label className="block">{lang.label}</Label>
-                      <Input
-                        value={messageSettings.decision_approved_email_subject_by_lang?.[lang.code] || ''}
-                        onChange={(event) => updateSettingField('decision_approved_email_subject_by_lang', lang.code, event.target.value)}
-                        placeholder="E-postämne"
-                      />
-                      <Textarea
-                        value={messageSettings.decision_approved_email_body_by_lang?.[lang.code] || ''}
-                        onChange={(event) => updateSettingField('decision_approved_email_body_by_lang', lang.code, event.target.value)}
-                        className="min-h-[90px]"
-                        placeholder="E-posttext"
-                      />
-                      <Input
-                        value={messageSettings.decision_approved_sms_by_lang?.[lang.code] || ''}
-                        onChange={(event) => updateSettingField('decision_approved_sms_by_lang', lang.code, event.target.value)}
-                        placeholder="SMS-text"
-                      />
-                    </div>
-                  ))}
+            </TabsContent>
+
+            <TabsContent value="ai" className="mt-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="border border-gray-200 rounded-xl p-4">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-3">AI-prompt: Svarshjälp</h3>
+                  <Textarea
+                    value={messageSettings.ai_reply_assistant_prompt || ''}
+                    onChange={(event) => updateTopLevelSetting('ai_reply_assistant_prompt', event.target.value)}
+                    className="min-h-[180px]"
+                  />
+                </div>
+                <div className="border border-gray-200 rounded-xl p-4">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-3">AI-prompt: Meddelandeförslag</h3>
+                  <Textarea
+                    value={messageSettings.ai_message_suggestion_prompt || ''}
+                    onChange={(event) => updateTopLevelSetting('ai_message_suggestion_prompt', event.target.value)}
+                    className="min-h-[180px]"
+                  />
                 </div>
               </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-1">Autosvar: Kostnadsförslag nekat</h3>
-                <p className="text-xs text-gray-500 mb-3">
-                  Variabler: <code>{'{{customer_name}}'}</code>, <code>{'{{ticket_number}}'}</code>, <code>{'{{amount}}'}</code>.
-                </p>
-                <div className="space-y-3 max-h-[320px] overflow-y-auto pr-2">
-                  {LANGUAGE_OPTIONS.map((lang) => (
-                    <div key={`decision-declined-${lang.code}`} className="space-y-2">
-                      <Label className="block">{lang.label}</Label>
-                      <Input
-                        value={messageSettings.decision_declined_email_subject_by_lang?.[lang.code] || ''}
-                        onChange={(event) => updateSettingField('decision_declined_email_subject_by_lang', lang.code, event.target.value)}
-                        placeholder="E-postämne"
-                      />
-                      <Textarea
-                        value={messageSettings.decision_declined_email_body_by_lang?.[lang.code] || ''}
-                        onChange={(event) => updateSettingField('decision_declined_email_body_by_lang', lang.code, event.target.value)}
-                        className="min-h-[90px]"
-                        placeholder="E-posttext"
-                      />
-                      <Input
-                        value={messageSettings.decision_declined_sms_by_lang?.[lang.code] || ''}
-                        onChange={(event) => updateSettingField('decision_declined_sms_by_lang', lang.code, event.target.value)}
-                        placeholder="SMS-text"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-1">Autosvar: Oklart svar</h3>
-                <p className="text-xs text-gray-500 mb-3">
-                  Variabler: <code>{'{{customer_name}}'}</code>, <code>{'{{ticket_number}}'}</code>.
-                </p>
-                <div className="space-y-3 max-h-[320px] overflow-y-auto pr-2">
-                  {LANGUAGE_OPTIONS.map((lang) => (
-                    <div key={`decision-unclear-${lang.code}`} className="space-y-2">
-                      <Label className="block">{lang.label}</Label>
-                      <Input
-                        value={messageSettings.decision_unclear_email_subject_by_lang?.[lang.code] || ''}
-                        onChange={(event) => updateSettingField('decision_unclear_email_subject_by_lang', lang.code, event.target.value)}
-                        placeholder="E-postämne"
-                      />
-                      <Textarea
-                        value={messageSettings.decision_unclear_email_body_by_lang?.[lang.code] || ''}
-                        onChange={(event) => updateSettingField('decision_unclear_email_body_by_lang', lang.code, event.target.value)}
-                        className="min-h-[90px]"
-                        placeholder="E-posttext"
-                      />
-                      <Input
-                        value={messageSettings.decision_unclear_sms_by_lang?.[lang.code] || ''}
-                        onChange={(event) => updateSettingField('decision_unclear_sms_by_lang', lang.code, event.target.value)}
-                        placeholder="SMS-text"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-3">AI-prompt: Svarshjälp</h3>
-                <Textarea
-                  value={messageSettings.ai_reply_assistant_prompt || ''}
-                  onChange={(event) => updateTopLevelSetting('ai_reply_assistant_prompt', event.target.value)}
-                  className="min-h-[110px]"
-                />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-3">AI-prompt: Meddelandeförslag</h3>
-                <Textarea
-                  value={messageSettings.ai_message_suggestion_prompt || ''}
-                  onChange={(event) => updateTopLevelSetting('ai_message_suggestion_prompt', event.target.value)}
-                  className="min-h-[110px]"
-                />
-              </div>
-            </div>
-          </div>
+            </TabsContent>
+          </Tabs>
           <div className="mt-6">
             <Button onClick={saveMessageSettings} disabled={savingSettings}>
               {savingSettings ? 'Sparar...' : 'Spara meddelandeinställningar'}
