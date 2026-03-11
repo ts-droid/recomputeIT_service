@@ -1699,6 +1699,108 @@ app.post('/api/tickets/:id/messages/ai-suggest', requireAuth, requireRole('servi
   }
 });
 
+app.post('/api/tickets/:id/actions/standardize', requireAuth, requireRole('service'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { planned_actions: plannedActions = '' } = req.body || {};
+    const sourceText = String(plannedActions || '').trim();
+    if (!sourceText) {
+      return res.status(400).json({ error: 'planned_actions krävs.' });
+    }
+
+    const { rows } = await query('SELECT id FROM service_tickets WHERE id = $1', [id]);
+    if (!rows[0]) {
+      return res.status(404).json({ error: 'Ärende hittades inte.' });
+    }
+
+    // Deterministic local fallback
+    const fallbackChecklist = sourceText
+      .split(/\n+/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .flatMap((line) =>
+        line
+          .split(/(?<=[.!?])\s+/)
+          .map((part) => part.trim())
+          .filter(Boolean)
+      )
+      .map((line) => line.replace(/^[-*•]\s*/, ''))
+      .filter(Boolean)
+      .map((line) => `- ${line}`)
+      .join('\n');
+
+    if (!DEEPSEEK_API_KEY) {
+      return res.json({ ok: true, standardized_actions: fallbackChecklist || sourceText, via: 'fallback' });
+    }
+
+    const response = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: DEEPSEEK_MODEL,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'Convert planned repair actions into a concise performed-actions checklist. Keep the same language as input. Return plain text only with one bullet per line starting with "- ". Do not add explanations.',
+          },
+          {
+            role: 'user',
+            content: `Planned actions:\n${sourceText}`,
+          },
+        ],
+        temperature: 0.1,
+      }),
+    });
+
+    if (!response.ok) {
+      const details = await response.text();
+      console.error('Standardize actions AI failed:', response.status, details);
+      return res.json({ ok: true, standardized_actions: fallbackChecklist || sourceText, via: 'fallback' });
+    }
+
+    const data = await response.json();
+    const aiText = data?.choices?.[0]?.message?.content?.trim() || '';
+    const standardized =
+      aiText
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => (line.startsWith('- ') ? line : `- ${line.replace(/^[-*•]\s*/, '')}`))
+        .join('\n') || fallbackChecklist || sourceText;
+
+    return res.json({ ok: true, standardized_actions: standardized, via: 'ai' });
+  } catch (error) {
+    console.error('POST /api/tickets/:id/actions/standardize error:', error);
+    return res.status(500).json({ error: 'Kunde inte standardisera åtgärder.' });
+  }
+});
+
+app.post('/api/tickets/:id/actions/translate', requireAuth, requireRole('service'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { text = '', language = 'sv' } = req.body || {};
+    const sourceText = String(text || '').trim();
+    if (!sourceText) return res.status(400).json({ error: 'text krävs.' });
+
+    const { rows } = await query('SELECT id FROM service_tickets WHERE id = $1', [id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Ärende hittades inte.' });
+
+    if (language === 'sv') {
+      return res.json({ ok: true, translated_text: sourceText, language });
+    }
+
+    const translated = await translateIfNeeded(sourceText, language, { allowEnglish: true, strict: true });
+    return res.json({ ok: true, translated_text: translated || sourceText, language });
+  } catch (error) {
+    console.error('POST /api/tickets/:id/actions/translate error:', error);
+    return res.status(500).json({ error: 'Kunde inte oversatta texten.' });
+  }
+});
+
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body || {};
@@ -1961,7 +2063,7 @@ app.post('/api/preview-notification', requireAuth, requireRole('service'), async
       final_cost: final_cost ?? ticket.final_cost,
     };
 
-    const strictPreviewTranslation = templateType === 'reparationFardig';
+    const strictPreviewTranslation = language !== 'sv';
     const localizedPreviewTicket = await localizeTicketFreeText(previewTicket, language, {
       strict: strictPreviewTranslation,
     });
@@ -1995,7 +2097,7 @@ app.post('/api/notify/cost-proposal', requireAuth, requireRole('service'), async
     if (requestedLanguage && requestedLanguage !== ticket.disclaimer_language) {
       await query(`UPDATE service_tickets SET disclaimer_language = $1 WHERE id = $2`, [requestedLanguage, ticket.id]);
     }
-    const localizedTicket = await localizeTicketFreeText(ticket, language);
+    const localizedTicket = await localizeTicketFreeText(ticket, language, { strict: language !== 'sv' });
     const messageSettings = await getAdminMessageSettings();
     const preview = await buildNotificationPreview({
       templateType: 'kostnadsforslag',
@@ -2166,7 +2268,7 @@ app.post('/api/notify/repair-ready', requireAuth, requireRole('service'), async 
     if (requestedLanguage && requestedLanguage !== ticket.disclaimer_language) {
       await query(`UPDATE service_tickets SET disclaimer_language = $1 WHERE id = $2`, [requestedLanguage, ticket.id]);
     }
-    const localizedTicket = await localizeTicketFreeText(ticket, language);
+    const localizedTicket = await localizeTicketFreeText(ticket, language, { strict: language !== 'sv' });
     const messageSettings = await getAdminMessageSettings();
     const preview = await buildNotificationPreview({
       templateType: 'reparationFardig',

@@ -123,6 +123,7 @@ export const TicketRow = ({ ticket, onUpdate }) => {
   const [composeBody, setComposeBody] = useState('');
   const [isSendingManual, setIsSendingManual] = useState(false);
   const [isGeneratingSuggestion, setIsGeneratingSuggestion] = useState(false);
+  const [isStandardizingActions, setIsStandardizingActions] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState(null);
   const { toast } = useToast();
   const customerDecision = decisionMap[ticket.last_customer_decision] || null;
@@ -272,13 +273,39 @@ export const TicketRow = ({ ticket, onUpdate }) => {
     }
   };
 
+  const standardizePlannedActions = async (text) => {
+    const source = String(text || '').trim();
+    if (!source) return '';
+
+    setIsStandardizingActions(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/tickets/${ticket.id}/actions/standardize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ planned_actions: source }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Kunde inte standardisera åtgärder.');
+      }
+      return payload?.standardized_actions || source;
+    } catch (error) {
+      return formatActionChecklist(source) || source;
+    } finally {
+      setIsStandardizingActions(false);
+    }
+  };
+
   const handleApprovalChange = async (checked) => {
     setIsApproving(true);
     const newStatus = checked ? 'Kostnadsförslag godkänt' : 'Väntar på kund';
 
     if (checked && currentDiagnosis) {
         toast({ title: "Godkänner...", description: "Kopierar information och uppdaterar ärendet." });
-        const copiedWorkDone = formatActionChecklist(currentDiagnosis) || currentDiagnosis;
+        const copiedWorkDone = await standardizePlannedActions(currentDiagnosis);
 
         const updates = {
             cost_proposal_approved: true,
@@ -361,9 +388,28 @@ export const TicketRow = ({ ticket, onUpdate }) => {
     toast({ title: "Skapar kvitto...", description: "Förbereder slutgiltigt kvitto." });
 
     try {
+      let summaryForReceipt = workDoneSummary;
+      if (language !== 'sv' && workDoneSummary?.trim()) {
+        const translateResponse = await fetch(
+          `${API_BASE_URL}/api/tickets/${ticket.id}/actions/translate`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ text: workDoneSummary, language }),
+          }
+        );
+        const translatePayload = await translateResponse.json().catch(() => ({}));
+        if (translateResponse.ok && translatePayload?.translated_text) {
+          summaryForReceipt = translatePayload.translated_text;
+        }
+      }
+
       const didOpenPrint = await printFinalReceipt(
         { ...ticketWithFinalCost, work_done_summary: workDoneSummary },
-        workDoneSummary,
+        summaryForReceipt,
         language
       );
       if (!didOpenPrint) {
@@ -630,11 +676,11 @@ export const TicketRow = ({ ticket, onUpdate }) => {
                         id={`cost-approved-${ticket.id}`} 
                         checked={!!ticket.cost_proposal_approved}
                         onCheckedChange={handleApprovalChange}
-                        disabled={isApproving || !canEdit}
+                        disabled={isApproving || isStandardizingActions || !canEdit}
                         className="h-5 w-5"
                       />
                       <Label htmlFor={`cost-approved-${ticket.id}`} className={`text-base font-semibold flex items-center gap-2 cursor-pointer ${ticket.cost_proposal_approved ? 'text-green-800' : 'text-gray-700'}`}>
-                        {isApproving ? <Loader2 size={18} className="animate-spin" /> : <ShieldCheck size={18} />}
+                        {isApproving || isStandardizingActions ? <Loader2 size={18} className="animate-spin" /> : <ShieldCheck size={18} />}
                         Kostnadsförslag godkänt
                       </Label>
                     </div>
