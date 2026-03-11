@@ -87,6 +87,15 @@ export async function initDb() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`
   );
+  await query(
+    `CREATE TABLE IF NOT EXISTS translation_cache (
+      source_text TEXT NOT NULL,
+      target_language TEXT NOT NULL,
+      translated_text TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (source_text, target_language)
+    )`
+  );
 
   const adminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL;
   const adminPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD;

@@ -67,6 +67,7 @@ export const TicketRow = ({ ticket, onUpdate }) => {
   const [composeSubject, setComposeSubject] = useState('');
   const [composeBody, setComposeBody] = useState('');
   const [isSendingManual, setIsSendingManual] = useState(false);
+  const [isGeneratingSuggestion, setIsGeneratingSuggestion] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState(null);
   const { toast } = useToast();
   const customerDecision = decisionMap[ticket.last_customer_decision] || null;
@@ -160,6 +161,40 @@ export const TicketRow = ({ ticket, onUpdate }) => {
       });
     } finally {
       setIsSendingManual(false);
+    }
+  };
+
+  const handleGenerateAiSuggestion = async () => {
+    if (!canEdit) return;
+    setIsGeneratingSuggestion(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/tickets/${ticket.id}/messages/ai-suggest`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          draft: composeBody,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Kunde inte skapa AI-förslag.');
+      }
+      setComposeBody(payload?.suggestion || '');
+      toast({
+        title: 'AI-förslag klart',
+        description: `Förslaget är anpassat till kundens språk (${payload?.language || ticket.disclaimer_language}).`,
+      });
+    } catch (error) {
+      toast({
+        title: 'AI-förslag misslyckades',
+        description: error?.message || 'Försök igen.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsGeneratingSuggestion(false);
     }
   };
 
@@ -426,6 +461,16 @@ export const TicketRow = ({ ticket, onUpdate }) => {
                           placeholder="Skriv meddelande till kunden..."
                           className="bg-white min-h-[70px]"
                         />
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          onClick={handleGenerateAiSuggestion}
+                          disabled={isGeneratingSuggestion}
+                          className="h-10 w-10 shrink-0"
+                          title="Skapa AI-förslag"
+                        >
+                          {isGeneratingSuggestion ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                        </Button>
                         <Button
                           size="icon"
                           onClick={handleSendManualEmail}

@@ -76,3 +76,11 @@ CREATE TABLE IF NOT EXISTS app_settings (
   value_json JSONB NOT NULL DEFAULT '{}'::jsonb,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS translation_cache (
+  source_text TEXT NOT NULL,
+  target_language TEXT NOT NULL,
+  translated_text TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (source_text, target_language)
+);

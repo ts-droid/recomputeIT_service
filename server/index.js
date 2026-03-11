@@ -68,6 +68,7 @@ const resendWebhookVerifier = RESEND_WEBHOOK_SECRET ? new SvixWebhook(RESEND_WEB
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || '';
 const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+const SUPPORTED_LANGUAGES = ['sv', 'en', 'ar', 'es', 'fi', 'ku', 'tr', 'pl', 'uk'];
 
 const ROLE_RANK = {
   base: 1,
@@ -844,6 +845,10 @@ const DEFAULT_MESSAGE_SETTINGS = {
     sv: 'Har du frågor, svara på detta mail eller SMS.',
     en: 'If you have questions, reply to this email or SMS.',
   },
+  ai_reply_assistant_prompt:
+    'Du hjälper servicepersonal att svara kunder kort, tydligt och professionellt. Föreslå ett konkret svar som kan skickas direkt.',
+  ai_message_suggestion_prompt:
+    'Skapa ett tydligt kundmeddelande för serviceärende baserat på diagnos, kostnad, status och senaste kunddialog.',
 };
 
 const mergeMessageSettings = (raw) => {
@@ -857,6 +862,10 @@ const mergeMessageSettings = (raw) => {
     sms_footer_by_lang: mergeByLang('sms_footer_by_lang'),
     cost_prompt_by_lang: mergeByLang('cost_prompt_by_lang'),
     ready_prompt_by_lang: mergeByLang('ready_prompt_by_lang'),
+    ai_reply_assistant_prompt:
+      parsed?.ai_reply_assistant_prompt || DEFAULT_MESSAGE_SETTINGS.ai_reply_assistant_prompt,
+    ai_message_suggestion_prompt:
+      parsed?.ai_message_suggestion_prompt || DEFAULT_MESSAGE_SETTINGS.ai_message_suggestion_prompt,
   };
 };
 
@@ -865,9 +874,65 @@ const getAdminMessageSettings = async () => {
   return mergeMessageSettings(rows[0]?.value_json || {});
 };
 
+const fillMissingTranslations = async (byLang = {}) => {
+  const sourceSv = byLang?.sv?.toString().trim() || '';
+  const sourceEn = byLang?.en?.toString().trim() || '';
+  const sourceText = sourceSv || sourceEn || '';
+  if (!sourceText) return byLang;
+
+  const next = { ...byLang };
+  for (const lang of SUPPORTED_LANGUAGES) {
+    const existing = next?.[lang]?.toString().trim();
+    if (existing) continue;
+    next[lang] = await translateIfNeeded(sourceText, lang, { allowEnglish: true });
+  }
+  return next;
+};
+
+const autoTranslateMessageSettings = async (settings = {}) => {
+  const normalized = mergeMessageSettings(settings);
+  return {
+    ...normalized,
+    email_footer_by_lang: await fillMissingTranslations(normalized.email_footer_by_lang),
+    sms_footer_by_lang: await fillMissingTranslations(normalized.sms_footer_by_lang),
+    cost_prompt_by_lang: await fillMissingTranslations(normalized.cost_prompt_by_lang),
+    ready_prompt_by_lang: await fillMissingTranslations(normalized.ready_prompt_by_lang),
+  };
+};
+
+const getCachedTranslation = async (text, targetLanguage) => {
+  const { rows } = await query(
+    `SELECT translated_text
+     FROM translation_cache
+     WHERE source_text = $1 AND target_language = $2
+     LIMIT 1`,
+    [text, targetLanguage]
+  );
+  return rows[0]?.translated_text || '';
+};
+
+const setCachedTranslation = async (text, targetLanguage, translatedText) => {
+  await query(
+    `INSERT INTO translation_cache (source_text, target_language, translated_text, updated_at)
+     VALUES ($1,$2,$3,NOW())
+     ON CONFLICT (source_text, target_language)
+     DO UPDATE SET translated_text = EXCLUDED.translated_text, updated_at = NOW()`,
+    [text, targetLanguage, translatedText]
+  );
+};
+
 const translateText = async (text, targetLanguage, options = {}) => {
   const { strict = false } = options;
   if (!text || !targetLanguage) return text;
+  if (targetLanguage === 'sv' && isLikelySwedish(text)) return text;
+
+  try {
+    const cached = await getCachedTranslation(text, targetLanguage);
+    if (cached) return cached;
+  } catch (error) {
+    console.warn('Translation cache read failed:', error?.message || error);
+  }
+
   if (!DEEPSEEK_API_KEY) {
     if (strict) {
       throw new Error('Translation unavailable: DEEPSEEK_API_KEY is missing');
@@ -912,7 +977,15 @@ const translateText = async (text, targetLanguage, options = {}) => {
       .replace(/^Language:\s*[a-z-]+\s*Text:\s*/i, '')
       .replace(/^Target language:\s*[a-z-]+\s*Text:\s*/i, '')
       .trim();
-    return cleaned || text;
+    const finalText = cleaned || text;
+    if (finalText && finalText !== text) {
+      try {
+        await setCachedTranslation(text, targetLanguage, finalText);
+      } catch (error) {
+        console.warn('Translation cache write failed:', error?.message || error);
+      }
+    }
+    return finalText;
   } catch (error) {
     console.error('DeepSeek translation failed:', error);
     if (strict) {
@@ -1468,6 +1541,90 @@ app.post('/api/tickets/:id/messages', requireAuth, requireRole('service'), async
   }
 });
 
+app.post('/api/tickets/:id/messages/ai-suggest', requireAuth, requireRole('service'), async (req, res) => {
+  try {
+    if (!DEEPSEEK_API_KEY) {
+      return res.status(400).json({ error: 'DEEPSEEK_API_KEY saknas.' });
+    }
+
+    const { id } = req.params;
+    const { draft = '' } = req.body || {};
+    const sender = req.user?.email || 'okänd';
+    const { rows } = await query('SELECT * FROM service_tickets WHERE id = $1', [id]);
+    const ticket = rows[0];
+    if (!ticket) return res.status(404).json({ error: 'Ärende hittades inte.' });
+
+    const language = getLanguage(ticket);
+    const settings = await getAdminMessageSettings();
+    const aiSystemPrompt =
+      settings.ai_reply_assistant_prompt || DEFAULT_MESSAGE_SETTINGS.ai_reply_assistant_prompt;
+    const aiMessagePrompt =
+      settings.ai_message_suggestion_prompt || DEFAULT_MESSAGE_SETTINGS.ai_message_suggestion_prompt;
+    const { rows: recentRows } = await query(
+      `SELECT direction, channel, sender_user, subject, body, created_at
+       FROM message_logs
+       WHERE ticket_id = $1
+       ORDER BY created_at DESC
+       LIMIT 8`,
+      [id]
+    );
+    const recent = recentRows
+      .reverse()
+      .map((msg) => {
+        const side = msg.direction === 'outbound' ? 'staff' : 'customer';
+        return `${side} (${msg.channel}) ${msg.created_at}: ${msg.body || msg.subject || ''}`;
+      })
+      .join('\n');
+
+    const response = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: DEEPSEEK_MODEL,
+        messages: [
+          {
+            role: 'system',
+            content: `${aiSystemPrompt}\n\nRules:\n- Keep tone professional and concise.\n- Return ONLY the message body.\n- Write the final answer in language code: ${language}.`,
+          },
+          {
+            role: 'user',
+            content:
+              `${aiMessagePrompt}\n\n` +
+              `ticket_number: ${ticket.ticket_number}\n` +
+              `customer_name: ${ticket.customer_name}\n` +
+              `device_type: ${ticket.device_type}\n` +
+              `device_model: ${ticket.device_model || ''}\n` +
+              `status: ${ticket.status || ''}\n` +
+              `diagnosis: ${ticket.diagnosis || ''}\n` +
+              `work_done_summary: ${ticket.work_done_summary || ''}\n` +
+              `final_cost: ${ticket.final_cost || ''}\n` +
+              `last_staff_sender: ${sender}\n` +
+              `staff_draft: ${draft || ''}\n` +
+              `recent_messages:\n${recent || '(none)'}`,
+          },
+        ],
+        temperature: 0.2,
+      }),
+    });
+
+    if (!response.ok) {
+      const details = await response.text();
+      return res.status(500).json({ error: `AI-förslag misslyckades (${response.status})`, details });
+    }
+    const data = await response.json();
+    const suggestionRaw = data?.choices?.[0]?.message?.content?.trim() || '';
+    const suggestion = await translateIfNeeded(suggestionRaw, language, { allowEnglish: true });
+
+    res.json({ ok: true, suggestion: suggestion || suggestionRaw, language });
+  } catch (error) {
+    console.error('POST /api/tickets/:id/messages/ai-suggest error:', error);
+    res.status(500).json({ error: 'Kunde inte skapa AI-förslag.' });
+  }
+});
+
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body || {};
@@ -1661,10 +1818,42 @@ app.put('/api/admin/message-settings', requireAuth, requireRole('admin'), async 
        RETURNING value_json`,
       ['message_templates', JSON.stringify(settings)]
     );
+    void autoTranslateMessageSettings(settings)
+      .then(async (translatedSettings) => {
+        await query(
+          `INSERT INTO app_settings (key, value_json, updated_at)
+           VALUES ($1, $2::jsonb, NOW())
+           ON CONFLICT (key)
+           DO UPDATE SET value_json = EXCLUDED.value_json, updated_at = NOW()`,
+          ['message_templates', JSON.stringify(translatedSettings)]
+        );
+      })
+      .catch((error) => {
+        console.error('Background auto-translation failed:', error);
+      });
     res.json(rows[0]?.value_json || settings);
   } catch (error) {
     console.error('PUT /api/admin/message-settings error:', error);
     res.status(500).json({ error: 'Kunde inte spara meddelandeinställningar.' });
+  }
+});
+
+app.post('/api/admin/message-settings/auto-translate', requireAuth, requireRole('admin'), async (_req, res) => {
+  try {
+    const current = await getAdminMessageSettings();
+    const translated = await autoTranslateMessageSettings(current);
+    const { rows } = await query(
+      `INSERT INTO app_settings (key, value_json, updated_at)
+       VALUES ($1, $2::jsonb, NOW())
+       ON CONFLICT (key)
+       DO UPDATE SET value_json = EXCLUDED.value_json, updated_at = NOW()
+       RETURNING value_json`,
+      ['message_templates', JSON.stringify(translated)]
+    );
+    res.json(rows[0]?.value_json || translated);
+  } catch (error) {
+    console.error('POST /api/admin/message-settings/auto-translate error:', error);
+    res.status(500).json({ error: 'Kunde inte auto-översätta meddelandeinställningar.' });
   }
 });
 

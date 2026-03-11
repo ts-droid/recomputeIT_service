@@ -9,6 +9,32 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+const LANGUAGE_OPTIONS = [
+  { code: 'sv', label: 'Svenska' },
+  { code: 'en', label: 'English' },
+  { code: 'ar', label: 'العربية' },
+  { code: 'es', label: 'Español' },
+  { code: 'fi', label: 'Suomi' },
+  { code: 'ku', label: 'Kurdî' },
+  { code: 'tr', label: 'Türkçe' },
+  { code: 'pl', label: 'Polski' },
+  { code: 'uk', label: 'Українська' },
+];
+
+const emptyByLang = () =>
+  LANGUAGE_OPTIONS.reduce((acc, item) => {
+    acc[item.code] = '';
+    return acc;
+  }, {});
+
+const normalizeSettingsPayload = (data = {}) => ({
+  email_footer_by_lang: { ...emptyByLang(), ...(data?.email_footer_by_lang || {}) },
+  sms_footer_by_lang: { ...emptyByLang(), ...(data?.sms_footer_by_lang || {}) },
+  cost_prompt_by_lang: { ...emptyByLang(), ...(data?.cost_prompt_by_lang || {}) },
+  ready_prompt_by_lang: { ...emptyByLang(), ...(data?.ready_prompt_by_lang || {}) },
+  ai_reply_assistant_prompt: data?.ai_reply_assistant_prompt || '',
+  ai_message_suggestion_prompt: data?.ai_message_suggestion_prompt || '',
+});
 
 const formatDuration = (seconds) => {
   if (!seconds || Number.isNaN(seconds)) return '—';
@@ -29,13 +55,9 @@ export function AdminPanel() {
   const [dateRange, setDateRange] = useState({ from: '', to: '' });
   const [testEmail, setTestEmail] = useState('');
   const [sendingTest, setSendingTest] = useState(false);
-  const [messageSettings, setMessageSettings] = useState({
-    email_footer_by_lang: { sv: '', en: '' },
-    sms_footer_by_lang: { sv: '', en: '' },
-    cost_prompt_by_lang: { sv: '', en: '' },
-    ready_prompt_by_lang: { sv: '', en: '' },
-  });
+  const [messageSettings, setMessageSettings] = useState(normalizeSettingsPayload());
   const [savingSettings, setSavingSettings] = useState(false);
+  const [translatingSettings, setTranslatingSettings] = useState(false);
   const [form, setForm] = useState({
     email: '',
     password: '',
@@ -91,12 +113,7 @@ export function AdminPanel() {
       const response = await fetch(`${API_BASE_URL}/api/admin/message-settings`, { headers });
       if (!response.ok) throw new Error('Message settings error');
       const data = await response.json();
-      setMessageSettings({
-        email_footer_by_lang: data?.email_footer_by_lang || { sv: '', en: '' },
-        sms_footer_by_lang: data?.sms_footer_by_lang || { sv: '', en: '' },
-        cost_prompt_by_lang: data?.cost_prompt_by_lang || { sv: '', en: '' },
-        ready_prompt_by_lang: data?.ready_prompt_by_lang || { sv: '', en: '' },
-      });
+      setMessageSettings(normalizeSettingsPayload(data));
     } catch (error) {
       console.error('Message settings fetch error:', error);
       toast({
@@ -117,6 +134,10 @@ export function AdminPanel() {
     }));
   };
 
+  const updateTopLevelSetting = (key, value) => {
+    setMessageSettings((prev) => ({ ...prev, [key]: value }));
+  };
+
   const saveMessageSettings = async () => {
     setSavingSettings(true);
     try {
@@ -127,12 +148,7 @@ export function AdminPanel() {
       });
       if (!response.ok) throw new Error('Save message settings error');
       const data = await response.json();
-      setMessageSettings({
-        email_footer_by_lang: data?.email_footer_by_lang || { sv: '', en: '' },
-        sms_footer_by_lang: data?.sms_footer_by_lang || { sv: '', en: '' },
-        cost_prompt_by_lang: data?.cost_prompt_by_lang || { sv: '', en: '' },
-        ready_prompt_by_lang: data?.ready_prompt_by_lang || { sv: '', en: '' },
-      });
+      setMessageSettings(normalizeSettingsPayload(data));
       toast({
         title: 'Sparat',
         description: 'Meddelandeinställningar uppdaterade.',
@@ -146,6 +162,32 @@ export function AdminPanel() {
       });
     } finally {
       setSavingSettings(false);
+    }
+  };
+
+  const autoTranslateMessageSettings = async () => {
+    setTranslatingSettings(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/message-settings/auto-translate`, {
+        method: 'POST',
+        headers,
+      });
+      if (!response.ok) throw new Error('Auto-translate message settings error');
+      const data = await response.json();
+      setMessageSettings(normalizeSettingsPayload(data));
+      toast({
+        title: 'Klart',
+        description: 'Översättningar uppdaterade för alla språk.',
+      });
+    } catch (error) {
+      console.error('Auto-translate message settings error:', error);
+      toast({
+        title: 'Auto-översättning misslyckades',
+        description: 'Kontrollera DeepSeek-nyckel och försök igen.',
+        variant: 'destructive',
+      });
+    } finally {
+      setTranslatingSettings(false);
     }
   };
 
@@ -334,68 +376,92 @@ export function AdminPanel() {
         </TabsContent>
 
         <TabsContent value="messages" className="mt-6">
+          <div className="mb-4 flex flex-wrap gap-2">
+            <Button variant="outline" onClick={autoTranslateMessageSettings} disabled={translatingSettings}>
+              {translatingSettings ? 'Översätter...' : 'AI-översätt alla språk'}
+            </Button>
+            <p className="text-xs text-gray-500 self-center">
+              Fyll i svenska/engelska och låt systemet auto-översätta samt cacha översättningar.
+            </p>
+          </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="space-y-6">
               <div>
                 <h3 className="text-lg font-semibold text-gray-800 mb-3">E-postfooter</h3>
-                <Label className="mb-2 block">Svenska</Label>
-                <Textarea
-                  value={messageSettings.email_footer_by_lang?.sv || ''}
-                  onChange={(event) => updateSettingField('email_footer_by_lang', 'sv', event.target.value)}
-                  className="mb-3 min-h-[90px]"
-                />
-                <Label className="mb-2 block">English</Label>
-                <Textarea
-                  value={messageSettings.email_footer_by_lang?.en || ''}
-                  onChange={(event) => updateSettingField('email_footer_by_lang', 'en', event.target.value)}
-                  className="min-h-[90px]"
-                />
+                <div className="space-y-3 max-h-[360px] overflow-y-auto pr-2">
+                  {LANGUAGE_OPTIONS.map((lang) => (
+                    <div key={`email-footer-${lang.code}`}>
+                      <Label className="mb-2 block">{lang.label}</Label>
+                      <Textarea
+                        value={messageSettings.email_footer_by_lang?.[lang.code] || ''}
+                        onChange={(event) => updateSettingField('email_footer_by_lang', lang.code, event.target.value)}
+                        className="min-h-[90px]"
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-gray-800 mb-3">SMS-footer</h3>
-                <Label className="mb-2 block">Svenska</Label>
-                <Input
-                  value={messageSettings.sms_footer_by_lang?.sv || ''}
-                  onChange={(event) => updateSettingField('sms_footer_by_lang', 'sv', event.target.value)}
-                  className="mb-3"
-                />
-                <Label className="mb-2 block">English</Label>
-                <Input
-                  value={messageSettings.sms_footer_by_lang?.en || ''}
-                  onChange={(event) => updateSettingField('sms_footer_by_lang', 'en', event.target.value)}
-                />
+                <div className="space-y-3 max-h-[280px] overflow-y-auto pr-2">
+                  {LANGUAGE_OPTIONS.map((lang) => (
+                    <div key={`sms-footer-${lang.code}`}>
+                      <Label className="mb-2 block">{lang.label}</Label>
+                      <Input
+                        value={messageSettings.sms_footer_by_lang?.[lang.code] || ''}
+                        onChange={(event) => updateSettingField('sms_footer_by_lang', lang.code, event.target.value)}
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
             <div className="space-y-6">
               <div>
                 <h3 className="text-lg font-semibold text-gray-800 mb-3">Prompt: Kostnadsförslag</h3>
-                <Label className="mb-2 block">Svenska</Label>
-                <Textarea
-                  value={messageSettings.cost_prompt_by_lang?.sv || ''}
-                  onChange={(event) => updateSettingField('cost_prompt_by_lang', 'sv', event.target.value)}
-                  className="mb-3 min-h-[90px]"
-                />
-                <Label className="mb-2 block">English</Label>
-                <Textarea
-                  value={messageSettings.cost_prompt_by_lang?.en || ''}
-                  onChange={(event) => updateSettingField('cost_prompt_by_lang', 'en', event.target.value)}
-                  className="min-h-[90px]"
-                />
+                <div className="space-y-3 max-h-[360px] overflow-y-auto pr-2">
+                  {LANGUAGE_OPTIONS.map((lang) => (
+                    <div key={`cost-prompt-${lang.code}`}>
+                      <Label className="mb-2 block">{lang.label}</Label>
+                      <Textarea
+                        value={messageSettings.cost_prompt_by_lang?.[lang.code] || ''}
+                        onChange={(event) => updateSettingField('cost_prompt_by_lang', lang.code, event.target.value)}
+                        className="min-h-[90px]"
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-gray-800 mb-3">Prompt: Reparation klar</h3>
-                <Label className="mb-2 block">Svenska</Label>
+                <div className="space-y-3 max-h-[360px] overflow-y-auto pr-2">
+                  {LANGUAGE_OPTIONS.map((lang) => (
+                    <div key={`ready-prompt-${lang.code}`}>
+                      <Label className="mb-2 block">{lang.label}</Label>
+                      <Textarea
+                        value={messageSettings.ready_prompt_by_lang?.[lang.code] || ''}
+                        onChange={(event) => updateSettingField('ready_prompt_by_lang', lang.code, event.target.value)}
+                        className="min-h-[90px]"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800 mb-3">AI-prompt: Svarshjälp</h3>
                 <Textarea
-                  value={messageSettings.ready_prompt_by_lang?.sv || ''}
-                  onChange={(event) => updateSettingField('ready_prompt_by_lang', 'sv', event.target.value)}
-                  className="mb-3 min-h-[90px]"
+                  value={messageSettings.ai_reply_assistant_prompt || ''}
+                  onChange={(event) => updateTopLevelSetting('ai_reply_assistant_prompt', event.target.value)}
+                  className="min-h-[110px]"
                 />
-                <Label className="mb-2 block">English</Label>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800 mb-3">AI-prompt: Meddelandeförslag</h3>
                 <Textarea
-                  value={messageSettings.ready_prompt_by_lang?.en || ''}
-                  onChange={(event) => updateSettingField('ready_prompt_by_lang', 'en', event.target.value)}
-                  className="min-h-[90px]"
+                  value={messageSettings.ai_message_suggestion_prompt || ''}
+                  onChange={(event) => updateTopLevelSetting('ai_message_suggestion_prompt', event.target.value)}
+                  className="min-h-[110px]"
                 />
               </div>
             </div>
