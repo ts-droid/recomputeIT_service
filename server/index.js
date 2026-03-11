@@ -2163,10 +2163,10 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
     const rawInboundText = inbound.text && typeof inbound.text === 'string' ? inbound.text : '';
     const extractedReply = extractTopReply(rawInboundText || inbound.subject || '');
     const inboundReplyText = extractedReply.text || (inbound.subject || '');
-    const inboundTextWithSwedish =
-      rawInboundText
-        ? await maybeAppendSwedishTranslation(ticket, rawInboundText)
-        : rawInboundText;
+    const inboundReplyWithSwedish =
+      inboundReplyText && typeof inboundReplyText === 'string'
+        ? await maybeAppendSwedishTranslation(ticket, inboundReplyText)
+        : inboundReplyText;
 
     if (!ticket) {
       await query(
@@ -2178,7 +2178,7 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
           inbound.from,
           inbound.to || null,
           inbound.subject || null,
-          inboundTextWithSwedish || inboundReplyText || null,
+          inboundReplyWithSwedish || inboundReplyText || null,
           rawInboundText || null,
           extractedReply.method,
           extractedReply.confidence,
@@ -2202,7 +2202,7 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
         inbound.from,
         inbound.to || null,
         inbound.subject || null,
-        inboundTextWithSwedish || inboundReplyText || null,
+        inboundReplyWithSwedish || inboundReplyText || null,
         rawInboundText || null,
         extractedReply.method,
         extractedReply.confidence,

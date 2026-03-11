@@ -76,6 +76,16 @@ export const TicketRow = ({ ticket, onUpdate }) => {
     () => [...messages].sort((a, b) => new Date(a.created_at) - new Date(b.created_at)),
     [messages]
   );
+  const chatMessages = useMemo(
+    () => sortedMessages.filter((msg) => msg.direction === 'inbound'),
+    [sortedMessages]
+  );
+  const customerFirstName = useMemo(() => {
+    const full = String(ticket.customer_name || '').trim();
+    if (!full) return 'Kund';
+    const [first] = full.split(/\s+/);
+    return first || 'Kund';
+  }, [ticket.customer_name]);
   const latestInboundMessage = useMemo(
     () => [...messages].find((msg) => msg.direction === 'inbound' && (msg.body || msg.subject)),
     [messages]
@@ -372,10 +382,10 @@ export const TicketRow = ({ ticket, onUpdate }) => {
                   <div className="max-h-[460px] overflow-y-auto space-y-2 pr-1 rounded-lg border border-gray-200 bg-[#f5efe5] p-3">
                     {loadingMessages ? (
                       <p className="text-xs text-gray-500">Laddar...</p>
-                    ) : messages.length === 0 ? (
+                    ) : chatMessages.length === 0 ? (
                       <p className="text-xs text-gray-500">Ingen kommunikation loggad ännu.</p>
                     ) : (
-                      sortedMessages.map((msg) => (
+                      chatMessages.map((msg) => (
                         <button
                           key={msg.id}
                           type="button"
@@ -388,7 +398,7 @@ export const TicketRow = ({ ticket, onUpdate }) => {
                               : 'bg-white border-gray-200 text-gray-800 rounded-bl-md'
                           }`}>
                           <p className="font-semibold text-gray-700">
-                            {msg.direction === 'outbound' ? 'Ni' : 'Kund'} · {channelLabel(msg.channel)}
+                            {msg.direction === 'outbound' ? 'Ni' : customerFirstName} · {channelLabel(msg.channel)}
                           </p>
                           {msg.subject && <p className="text-gray-700 mt-1 break-words">{msg.subject}</p>}
                           {msg.body && <p className="text-gray-700 mt-1 break-words whitespace-pre-wrap">{msg.body}</p>}
