@@ -878,6 +878,7 @@ const DEFAULT_MESSAGE_SETTINGS = {
     'Du hjälper servicepersonal att svara kunder kort, tydligt och professionellt. Föreslå ett konkret svar som kan skickas direkt.',
   ai_message_suggestion_prompt:
     'Skapa ett tydligt kundmeddelande för serviceärende baserat på diagnos, kostnad, status och senaste kunddialog.',
+  chat_default_language: 'sv',
 };
 
 const mergeMessageSettings = (raw) => {
@@ -895,6 +896,8 @@ const mergeMessageSettings = (raw) => {
       parsed?.ai_reply_assistant_prompt || DEFAULT_MESSAGE_SETTINGS.ai_reply_assistant_prompt,
     ai_message_suggestion_prompt:
       parsed?.ai_message_suggestion_prompt || DEFAULT_MESSAGE_SETTINGS.ai_message_suggestion_prompt,
+    chat_default_language:
+      parsed?.chat_default_language || DEFAULT_MESSAGE_SETTINGS.chat_default_language,
   };
 };
 
@@ -1517,7 +1520,26 @@ app.get('/api/tickets/:id/messages', requireAuth, async (req, res) => {
        LIMIT 100`,
       [id]
     );
-    res.json(rows);
+    const settings = await getAdminMessageSettings();
+    const defaultChatLanguage = settings?.chat_default_language || 'sv';
+    const enrichedRows = await Promise.all(
+      rows.map(async (row) => {
+        if (!row?.body || !defaultChatLanguage) return row;
+        try {
+          const translated = await translateText(row.body, defaultChatLanguage);
+          if (
+            translated &&
+            normalizeComparableText(translated) !== normalizeComparableText(row.body)
+          ) {
+            return { ...row, chat_internal_translation: translated, chat_translation_language: defaultChatLanguage };
+          }
+        } catch (error) {
+          console.warn('Chat internal translation failed:', error?.message || error);
+        }
+        return row;
+      })
+    );
+    res.json(enrichedRows);
   } catch (error) {
     console.error('GET /api/tickets/:id/messages error:', error);
     res.status(500).json({ error: 'Kunde inte hämta kommunikationslogg.' });
@@ -2405,11 +2427,6 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
     const extractedReply = extractTopReply(rawInboundText || inbound.subject || '');
     const cleanedReplyText = cleanVisibleReplyText(extractedReply.text || '');
     const inboundReplyText = cleanedReplyText || extractedReply.text || (inbound.subject || '');
-    const inboundReplyWithSwedish =
-      inboundReplyText && typeof inboundReplyText === 'string'
-        ? await maybeAppendSwedishTranslation(ticket, inboundReplyText)
-        : inboundReplyText;
-
     if (!ticket) {
       await query(
         `INSERT INTO message_logs (channel, direction, from_number, to_number, subject, body, raw_body, parse_method, parse_confidence, message_id, in_reply_to, references_header, reply_token, provider)
@@ -2420,7 +2437,7 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
           inbound.from,
           inbound.to || null,
           inbound.subject || null,
-          inboundReplyWithSwedish || inboundReplyText || null,
+          inboundReplyText || null,
           rawInboundText || null,
           extractedReply.method,
           extractedReply.confidence,
@@ -2444,7 +2461,7 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
         inbound.from,
         inbound.to || null,
         inbound.subject || null,
-        inboundReplyWithSwedish || inboundReplyText || null,
+        inboundReplyText || null,
         rawInboundText || null,
         extractedReply.method,
         extractedReply.confidence,

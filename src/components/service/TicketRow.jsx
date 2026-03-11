@@ -501,6 +501,11 @@ export const TicketRow = ({ ticket, onUpdate }) => {
                           </p>
                           {msg.subject && <p className="text-gray-700 mt-1 break-words">{msg.subject}</p>}
                           {msg.body && <p className="text-gray-700 mt-1 break-words whitespace-pre-wrap">{cleanChatBody(msg.body) || msg.body}</p>}
+                          {msg.chat_internal_translation && (
+                            <p className="text-gray-500 mt-2 break-words whitespace-pre-wrap border-t border-gray-200 pt-2">
+                              ({msg.chat_internal_translation})
+                            </p>
+                          )}
                           <p className="text-gray-500 mt-2 text-[11px]">
                             {new Date(msg.created_at).toLocaleString('sv-SE')}
                             {msg.sender_user ? ` · ${msg.sender_user}` : ''}
@@ -746,6 +751,11 @@ export const TicketRow = ({ ticket, onUpdate }) => {
               <div>
                 <p className="font-semibold text-gray-800">Text</p>
                 <p className="mt-1 whitespace-pre-wrap break-words">{cleanChatBody(selectedMessage.body) || selectedMessage.body || '(Ingen brödtext mottagen i webhook)'}</p>
+                {selectedMessage.chat_internal_translation && (
+                  <p className="mt-2 whitespace-pre-wrap break-words text-gray-500 border-t border-gray-200 pt-2">
+                    ({selectedMessage.chat_internal_translation})
+                  </p>
+                )}
               </div>
               {selectedMessage.parse_confidence && (
                 <p className="text-xs text-gray-500">

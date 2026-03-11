@@ -34,6 +34,7 @@ const normalizeSettingsPayload = (data = {}) => ({
   ready_prompt_by_lang: { ...emptyByLang(), ...(data?.ready_prompt_by_lang || {}) },
   ai_reply_assistant_prompt: data?.ai_reply_assistant_prompt || '',
   ai_message_suggestion_prompt: data?.ai_message_suggestion_prompt || '',
+  chat_default_language: data?.chat_default_language || 'sv',
 });
 
 const formatDuration = (seconds) => {
@@ -376,6 +377,29 @@ export function AdminPanel() {
         </TabsContent>
 
         <TabsContent value="messages" className="mt-6">
+          <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label className="mb-2 block">Internt chatspråk (default)</Label>
+              <Select
+                value={messageSettings.chat_default_language || 'sv'}
+                onValueChange={(value) => updateTopLevelSetting('chat_default_language', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Välj språk" />
+                </SelectTrigger>
+                <SelectContent>
+                  {LANGUAGE_OPTIONS.map((lang) => (
+                    <SelectItem key={`chat-lang-${lang.code}`} value={lang.code}>
+                      {lang.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-500 mt-2">
+                Kundens meddelanden visas i original + översättning till detta språk (endast internt i chatten).
+              </p>
+            </div>
+          </div>
           <div className="mb-4 flex flex-wrap gap-2">
             <Button variant="outline" onClick={autoTranslateMessageSettings} disabled={translatingSettings}>
               {translatingSettings ? 'Översätter...' : 'AI-översätt alla språk'}
