@@ -302,17 +302,19 @@ export const TicketRow = ({ ticket, onUpdate }) => {
   const handleApprovalChange = async (checked) => {
     setIsApproving(true);
     const newStatus = checked ? 'Kostnadsförslag godkänt' : 'Väntar på kund';
+    const sourceActions = String(currentDiagnosis || ticket.diagnosis || '').trim();
 
-    if (checked && currentDiagnosis) {
-        toast({ title: "Godkänner...", description: "Kopierar information och uppdaterar ärendet." });
-        const copiedWorkDone = await standardizePlannedActions(currentDiagnosis);
+    if (checked) {
+        toast({ title: "Godkänner...", description: "Vi fyller i utförda åtgärder och uppdaterar ärendet." });
+        const copiedWorkDone =
+          !workDoneSummary.trim() && sourceActions ? await standardizePlannedActions(sourceActions) : workDoneSummary;
+        const resolvedFinalCost = String(finalCost || ticket.cost_proposal || '').trim();
 
         const updates = {
             cost_proposal_approved: true,
             status: newStatus,
             work_done_summary: copiedWorkDone,
-            final_cost: finalCost,
-            diagnosis: null,
+            final_cost: resolvedFinalCost,
         };
         
         const updatedTicket = await onUpdate(ticket.id, updates);
@@ -320,20 +322,16 @@ export const TicketRow = ({ ticket, onUpdate }) => {
         if (updatedTicket) {
             setWorkDoneSummary(updatedTicket.work_done_summary || '');
             setFinalCost(updatedTicket.final_cost || '');
-            setCurrentDiagnosis(null);
-            toast({ title: "Kostnadsförslag godkänt!", description: `Information har kopierats till 'Utförda åtgärder' och 'Slutlig kostnad'.` });
+            setCurrentDiagnosis(updatedTicket.diagnosis || sourceActions || null);
+            toast({ title: "Kostnadsförslag godkänt!", description: `Utförda åtgärder och slutlig kostnad är nu ifyllda men kan fortfarande justeras manuellt.` });
         }
 
     } else {
         await onUpdate(ticket.id, { cost_proposal_approved: checked, status: newStatus });
-        if (checked) {
-             toast({ title: "Kostnadsförslag godkänt!", description: "Status har uppdaterats. Ingen diagnos att kopiera." });
-        } else {
-            toast({ 
-                title: "Status uppdaterad", 
-                description: `Status för ärende #${ticket.ticket_number} har ändrats till "${newStatus}".` 
-            });
-        }
+        toast({ 
+            title: "Status uppdaterad", 
+            description: `Status för ärende #${ticket.ticket_number} har ändrats till "${newStatus}".` 
+        });
     }
     setIsApproving(false);
   };

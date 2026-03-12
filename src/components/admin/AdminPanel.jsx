@@ -61,6 +61,7 @@ const normalizeSettingsPayload = (data = {}) => ({
   },
   ai_reply_assistant_prompt: data?.ai_reply_assistant_prompt || '',
   ai_message_suggestion_prompt: data?.ai_message_suggestion_prompt || '',
+  ai_work_done_prompt: data?.ai_work_done_prompt || '',
   chat_default_language: data?.chat_default_language || 'sv',
 });
 
@@ -636,6 +637,17 @@ export function AdminPanel() {
                     value={messageSettings.ai_message_suggestion_prompt || ''}
                     onChange={(event) => updateTopLevelSetting('ai_message_suggestion_prompt', event.target.value)}
                     className="min-h-[180px]"
+                  />
+                </div>
+                <div className="border border-gray-200 rounded-xl p-4 lg:col-span-2">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-1">AI-prompt: Utförda åtgärder</h3>
+                  <p className="text-xs text-gray-500 mb-3">
+                    Används när planerade åtgärder omvandlas till fältet för utförda åtgärder.
+                  </p>
+                  <Textarea
+                    value={messageSettings.ai_work_done_prompt || ''}
+                    onChange={(event) => updateTopLevelSetting('ai_work_done_prompt', event.target.value)}
+                    className="min-h-[160px]"
                   />
                 </div>
               </div>

@@ -280,6 +280,48 @@ const buildEmailHtml = (body = '') => {
   return `${hiddenHtml}<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:16px;line-height:1.6;color:#111827;white-space:normal;">${visibleHtml}</div>`;
 };
 
+
+const getInboundSmsProviderId = (payload = {}) => {
+  const candidates = [
+    payload.id,
+    payload.smsid,
+    payload.message_id,
+    payload.messageid,
+    payload.sid,
+  ];
+  const found = candidates.find((value) => value !== undefined && value !== null && String(value).trim() !== '');
+  return found ? String(found).trim() : null;
+};
+
+const isDuplicateInboundSms = async ({ ticketId = null, from = '', body = '', providerId = null }) => {
+  if (providerId) {
+    const existing = await query(
+      `SELECT id FROM message_logs
+       WHERE channel = 'sms'
+         AND direction = 'inbound'
+         AND provider = '46elks'
+         AND provider_id = $1
+       LIMIT 1`,
+      [providerId]
+    );
+    if (existing.rowCount > 0) return true;
+  }
+
+  const duplicate = await query(
+    `SELECT id FROM message_logs
+     WHERE channel = 'sms'
+       AND direction = 'inbound'
+       AND provider = '46elks'
+       AND COALESCE(ticket_id::text, '') = COALESCE($1::text, '')
+       AND COALESCE(from_number, '') = COALESCE($2, '')
+       AND COALESCE(body, '') = COALESCE($3, '')
+       AND created_at >= NOW() - INTERVAL '2 minutes'
+     LIMIT 1`,
+    [ticketId, from, body]
+  );
+  return duplicate.rowCount > 0;
+};
+
 const buildFallbackActionChecklist = (sourceText = '') =>
   String(sourceText || '')
     .split(/\n+/)
@@ -296,7 +338,7 @@ const buildFallbackActionChecklist = (sourceText = '') =>
     .map((line) => `- ${line}`)
     .join('\n');
 
-const standardizeActionsText = async (sourceText = '') => {
+const standardizeActionsText = async (sourceText = '', options = {}) => {
   const normalizedText = String(sourceText || '').trim();
   if (!normalizedText) return '';
 
@@ -306,6 +348,13 @@ const standardizeActionsText = async (sourceText = '') => {
   }
 
   try {
+    const messageSettings =
+      options?.messageSettings && typeof options.messageSettings === 'object'
+        ? mergeMessageSettings(options.messageSettings)
+        : await getAdminMessageSettings();
+    const workDonePrompt =
+      messageSettings?.ai_work_done_prompt || DEFAULT_MESSAGE_SETTINGS.ai_work_done_prompt;
+
     const response = await fetch('https://api.deepseek.com/chat/completions', {
       method: 'POST',
       headers: {
@@ -317,8 +366,7 @@ const standardizeActionsText = async (sourceText = '') => {
         messages: [
           {
             role: 'system',
-            content:
-              'Convert planned repair actions into a concise performed-actions checklist. Keep the same language as input. Return plain text only with one bullet per line starting with "- ". Do not add explanations.',
+            content: `${workDonePrompt}\n\nRules:\n- Keep the same language as input.\n- Return plain text only.\n- Use one bullet per line starting with "- ".\n- Do not add headings or explanations outside the list.`,
           },
           {
             role: 'user',
@@ -938,6 +986,8 @@ const DEFAULT_MESSAGE_SETTINGS = {
     'Du hjälper servicepersonal att svara kunder kort, tydligt och professionellt. Föreslå ett konkret svar som kan skickas direkt.',
   ai_message_suggestion_prompt:
     'Skapa ett tydligt kundmeddelande för serviceärende baserat på diagnos, kostnad, status och senaste kunddialog.',
+  ai_work_done_prompt:
+    'Du hjälper en servicetekniker att skriva utförda åtgärder baserat på planerade åtgärder. Formulera en kort, tydlig och professionell punktlista över det arbete som ska eller har utförts.',
   chat_default_language: 'sv',
 };
 
@@ -965,6 +1015,8 @@ const mergeMessageSettings = (raw) => {
       parsed?.ai_reply_assistant_prompt || DEFAULT_MESSAGE_SETTINGS.ai_reply_assistant_prompt,
     ai_message_suggestion_prompt:
       parsed?.ai_message_suggestion_prompt || DEFAULT_MESSAGE_SETTINGS.ai_message_suggestion_prompt,
+    ai_work_done_prompt:
+      parsed?.ai_work_done_prompt || DEFAULT_MESSAGE_SETTINGS.ai_work_done_prompt,
     chat_default_language:
       parsed?.chat_default_language || DEFAULT_MESSAGE_SETTINGS.chat_default_language,
   };
@@ -2878,6 +2930,7 @@ app.post('/api/webhooks/46elks', async (req, res) => {
 
     const from = req.body.from || req.body.sender;
     const message = (req.body.message || req.body.text || '').trim();
+    const providerId = getInboundSmsProviderId(req.body || {});
 
     if (!from || !message) {
       return res.status(400).json({ error: 'Invalid payload' });
@@ -2891,20 +2944,30 @@ app.post('/api/webhooks/46elks', async (req, res) => {
 
     const ticket = rows[0];
     const messageWithSwedish = await maybeAppendSwedishTranslation(ticket, message);
+    const duplicateInbound = await isDuplicateInboundSms({
+      ticketId: ticket?.id || null,
+      from,
+      body: messageWithSwedish,
+      providerId,
+    });
+
+    if (duplicateInbound) {
+      return res.json({ ok: true, duplicate: true });
+    }
 
     if (!ticket) {
       await query(
-        `INSERT INTO message_logs (channel, direction, from_number, body, provider)
-         VALUES ($1,$2,$3,$4,$5)`,
-        ['sms', 'inbound', from, messageWithSwedish, '46elks']
+        `INSERT INTO message_logs (channel, direction, from_number, body, provider, provider_id)
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        ['sms', 'inbound', from, messageWithSwedish, '46elks', providerId]
       );
       return res.json({ ok: true });
     }
 
     await query(
-      `INSERT INTO message_logs (ticket_id, channel, direction, from_number, body, provider)
-       VALUES ($1,$2,$3,$4,$5,$6)`,
-      [ticket.id, 'sms', 'inbound', from, messageWithSwedish, '46elks']
+      `INSERT INTO message_logs (ticket_id, channel, direction, from_number, body, provider, provider_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [ticket.id, 'sms', 'inbound', from, messageWithSwedish, '46elks', providerId]
     );
 
     const decision = parseApprovalDecision(message);
