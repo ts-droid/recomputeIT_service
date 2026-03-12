@@ -348,10 +348,10 @@ export const TicketRow = ({ ticket, onUpdate }) => {
       return;
     }
 
-    if (!ticket.customer_email) {
+    if (!ticket.customer_email && !ticket.customer_phone) {
       toast({
-        title: "E-postadress saknas",
-        description: "Kan inte meddela kund eftersom ingen e-postadress är registrerad.",
+        title: "Kontaktuppgift saknas",
+        description: "Kan inte meddela kund eftersom varken telefonnummer eller e-postadress är registrerad.",
         variant: "destructive",
       });
       return;
@@ -661,7 +661,7 @@ export const TicketRow = ({ ticket, onUpdate }) => {
                         variant="outline"
                         className="border-purple-500/50 bg-purple-50 text-purple-700 hover:bg-purple-100 hover:text-purple-800 gap-2"
                         onClick={() => handleNotify('kostnadsforslag')}
-                        disabled={!ticket.customer_email || !canEdit}
+                        disabled={(!ticket.customer_email && !ticket.customer_phone) || !canEdit}
                       >
                         <DollarSign size={16} /> Skicka kostnadsförslag
                       </Button>
@@ -722,7 +722,7 @@ export const TicketRow = ({ ticket, onUpdate }) => {
                             variant="outline"
                             className="border-blue-500/50 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 gap-2"
                             onClick={() => handleNotify('reparationFardig')}
-                            disabled={!ticket.customer_email || !canEdit}
+                            disabled={(!ticket.customer_email && !ticket.customer_phone) || !canEdit}
                           >
                             <Mail size={16} /> Meddela att reparation är klar
                           </Button>
