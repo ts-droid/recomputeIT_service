@@ -15,6 +15,8 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 8080;
 const DIST_DIR = path.resolve(__dirname, '..', 'dist');
+const BRAND_NAME = 're:Compute-IT';
+const TRANSLATION_PROTECTED_TERMS = Object.freeze([BRAND_NAME]);
 
 app.use(
   express.json({
@@ -834,12 +836,13 @@ const fillMissingTranslations = async (byLang = {}, options = {}) => {
   const { overwriteExisting = false } = options;
   const sourceSv = byLang?.sv?.toString().trim() || '';
   const sourceEn = byLang?.en?.toString().trim() || '';
-  const sourceText = sourceSv || sourceEn || '';
+  const sourceLanguage = sourceSv ? 'sv' : sourceEn ? 'en' : '';
+  const sourceText = sourceLanguage === 'sv' ? sourceSv : sourceEn;
   if (!sourceText) return byLang;
 
   const next = { ...byLang };
   for (const lang of SUPPORTED_LANGUAGES) {
-    if (lang === 'sv' || lang === 'en') continue;
+    if (lang === sourceLanguage) continue;
     const existing = next?.[lang]?.toString().trim() || '';
     if (!overwriteExisting && existing) continue;
     next[lang] = await translateIfNeeded(sourceText, lang, { allowEnglish: true });
@@ -932,13 +935,35 @@ const setCachedTranslation = async (text, targetLanguage, translatedText) => {
   );
 };
 
+const protectTermsForTranslation = (text, preserveTerms = []) => {
+  const source = text?.toString() || '';
+  let prepared = source;
+  const replacements = [];
+
+  [...new Set(preserveTerms.filter(Boolean))]
+    .sort((left, right) => right.length - left.length)
+    .forEach((term, index) => {
+      if (!prepared.includes(term)) return;
+      const token = `__PRESERVE_TERM_${index}__`;
+      prepared = prepared.split(term).join(token);
+      replacements.push([token, term]);
+    });
+
+  return { prepared, replacements };
+};
+
+const restoreProtectedTerms = (text, replacements = []) =>
+  replacements.reduce((value, [token, term]) => value.split(token).join(term), text?.toString() || '');
+
 const translateText = async (text, targetLanguage, options = {}) => {
-  const { strict = false } = options;
+  const { strict = false, preserveTerms = TRANSLATION_PROTECTED_TERMS } = options;
   if (!text || !targetLanguage) return text;
   if (targetLanguage === 'sv' && isLikelySwedish(text)) return text;
 
+  const { prepared, replacements } = protectTermsForTranslation(text, preserveTerms);
+
   try {
-    const cached = await getCachedTranslation(text, targetLanguage);
+    const cached = await getCachedTranslation(prepared, targetLanguage);
     if (cached) return cached;
   } catch (error) {
     console.warn('Translation cache read failed:', error?.message || error);
@@ -964,11 +989,11 @@ const translateText = async (text, targetLanguage, options = {}) => {
           {
             role: 'system',
             content:
-              'Translate the text into the requested target language. Keep numbers, names, and case numbers unchanged. Return only the translated text.',
+              'Translate the text into the requested target language. Keep numbers, names, case numbers, and placeholder tokens like __PRESERVE_TERM_0__ unchanged. Return only the translated text.',
           },
           {
             role: 'user',
-            content: `Target language: ${targetLanguage}\nText: ${text}`,
+            content: `Target language: ${targetLanguage}\nText: ${prepared}`,
           },
         ],
         temperature: 0.2,
@@ -988,10 +1013,10 @@ const translateText = async (text, targetLanguage, options = {}) => {
       .replace(/^Language:\s*[a-z-]+\s*Text:\s*/i, '')
       .replace(/^Target language:\s*[a-z-]+\s*Text:\s*/i, '')
       .trim();
-    const finalText = cleaned || text;
+    const finalText = restoreProtectedTerms(cleaned || text, replacements);
     if (finalText && finalText !== text) {
       try {
-        await setCachedTranslation(text, targetLanguage, finalText);
+        await setCachedTranslation(prepared, targetLanguage, finalText);
       } catch (error) {
         console.warn('Translation cache write failed:', error?.message || error);
       }
