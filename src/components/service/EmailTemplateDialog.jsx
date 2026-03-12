@@ -332,11 +332,11 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
             </p>
           )}
           <div>
-            <Label className="font-semibold text-gray-800">E-post Ämne</Label>
+            <Label className="font-semibold text-gray-800">Ämne</Label>
             <p className="text-sm bg-white p-2 rounded-md mt-1">{effectiveSubject}</p>
           </div>
           <div>
-            <Label className="font-semibold text-gray-800">E-post Innehåll</Label>
+            <Label className="font-semibold text-gray-800">Meddelande</Label>
             <div className="text-sm bg-white p-3 rounded-md mt-1 whitespace-pre-wrap">{effectiveBody}</div>
           </div>
         </div>

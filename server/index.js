@@ -241,6 +241,45 @@ const appendReplyGuidance = (body = '', language = 'sv', replyToken = '') => {
   return `${outboundStart}\n${bodyWithoutAnyMarker}\n\n${directReplyLine}\n${outboundEnd}\n${tokenLine}`.trim();
 };
 
+const isMachineReplyLine = (line = '') => {
+  const normalizedLine = String(line || '').trim();
+  if (!normalizedLine) return false;
+  if (normalizedLine === OUTBOUND_BLOCK_DELIMITER) return true;
+  return (
+    OUTBOUND_BLOCK_START_REGEX.test(normalizedLine) ||
+    OUTBOUND_BLOCK_END_REGEX.test(normalizedLine) ||
+    REPLY_TOKEN_REGEX.test(normalizedLine)
+  );
+};
+
+const stripReplySystemLines = (body = '') =>
+  String(body || '')
+    .split('\n')
+    .filter((line) => !isMachineReplyLine(line))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+const escapeHtml = (value = '') =>
+  String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const buildEmailHtml = (body = '') => {
+  const lines = String(body || '').split('\n');
+  const machineLines = lines.filter((line) => isMachineReplyLine(line));
+  const visibleBody = stripReplySystemLines(body);
+  const visibleHtml = escapeHtml(visibleBody).replace(/\n/g, '<br>');
+  const hiddenHtml = machineLines.length
+    ? `<div style="display:none;max-height:0;overflow:hidden;font-size:1px;line-height:1px;color:transparent;opacity:0;mso-hide:all;">${escapeHtml(machineLines.join('\n')).replace(/\n/g, '<br>')}</div>`
+    : '';
+
+  return `${hiddenHtml}<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:16px;line-height:1.6;color:#111827;white-space:normal;">${visibleHtml}</div>`;
+};
+
 const buildFallbackActionChecklist = (sourceText = '') =>
   String(sourceText || '')
     .split(/\n+/)
@@ -1284,10 +1323,12 @@ const sendDecisionAcknowledgement = async ({ ticket, decision, channel, smsTo, e
   }
 
   if (channel === 'email' && emailTo && (template.subject || template.body)) {
+    const plainBody = template.body || '';
     await sendEmail({
       to: emailTo,
       subject: template.subject || `Ärende #${ticket.ticket_number}`,
-      body: template.body || '',
+      body: plainBody,
+      html: buildEmailHtml(plainBody),
     });
     await query(
       `INSERT INTO message_logs (ticket_id, channel, direction, to_number, subject, body, provider)
@@ -1323,6 +1364,7 @@ const sendDecisionClarification = async ({ ticket, channel, smsTo, emailTo }) =>
       to: emailTo,
       subject: template.subject || `Ärende #${ticket.ticket_number}`,
       body: bodyWithMarker,
+      html: buildEmailHtml(bodyWithMarker),
     });
     await query(
       `INSERT INTO message_logs (ticket_id, channel, direction, to_number, subject, body, reply_token, provider)
@@ -1380,7 +1422,7 @@ const buildNotificationPreview = async ({ templateType, ticket, language, settin
     body = appendUniqueBlock(body, emailFooter);
     body = appendReplyGuidance(body, language, replyToken);
     sms = appendUniqueBlock(sms, smsFooter);
-    return { subject, body, sms };
+    return { subject, body, display_body: stripReplySystemLines(body), html: buildEmailHtml(body), sms };
   }
 
   const messageBase =
@@ -1397,7 +1439,7 @@ const buildNotificationPreview = async ({ templateType, ticket, language, settin
   body = appendUniqueBlock(body, emailFooter);
   body = appendReplyGuidance(body, language, replyToken);
   sms = appendUniqueBlock(sms, smsFooter);
-  return { subject, body, sms };
+  return { subject, body, display_body: stripReplySystemLines(body), html: buildEmailHtml(body), sms };
 };
 
 const sendSms = async ({ to, message }) => {
@@ -1445,7 +1487,7 @@ const mailer = SMTP_HOST
     })
   : null;
 
-const sendEmail = async ({ to, subject, body }) => {
+const sendEmail = async ({ to, subject, body, html }) => {
   let resendError = null;
   if (RESEND_API_KEY && RESEND_FROM) {
     try {
@@ -1461,6 +1503,7 @@ const sendEmail = async ({ to, subject, body }) => {
         to: Array.isArray(to) ? to : [to],
         subject,
         text: body,
+        html: html || undefined,
         }),
       });
 
@@ -1484,6 +1527,7 @@ const sendEmail = async ({ to, subject, body }) => {
         to,
         subject,
         text: body,
+        html: html || undefined,
       });
 
       return result;
@@ -1801,6 +1845,7 @@ app.post('/api/tickets/:id/messages', requireAuth, requireRole('service'), async
     const resolvedSubject = translatedSubject?.toString().trim() || baseSubject;
     const replyToken = generateReplyToken();
     const resolvedBody = appendReplyGuidance(translatedBody?.toString().trim() || baseBody, language, replyToken);
+    const resolvedHtml = buildEmailHtml(resolvedBody);
     if (!resolvedBody) {
       return res.status(400).json({ error: 'Meddelandetext saknas efter översättning.' });
     }
@@ -1809,6 +1854,7 @@ app.post('/api/tickets/:id/messages', requireAuth, requireRole('service'), async
       to: ticket.customer_email,
       subject: resolvedSubject,
       body: resolvedBody,
+      html: resolvedHtml,
     });
 
     const inserted = await query(
@@ -2118,7 +2164,7 @@ app.post('/api/admin/test-email', requireAuth, requireRole('admin'), async (req,
     const subject = 'Testmail från re:Compute-IT';
     const body = 'Detta är ett testmail från systemet. Om du ser detta fungerar SMTP.';
 
-    await sendEmail({ to, subject, body });
+    await sendEmail({ to, subject, body, html: buildEmailHtml(body) });
     res.json({ ok: true });
   } catch (error) {
     console.error('POST /api/admin/test-email error:', {
@@ -2236,7 +2282,7 @@ app.post('/api/preview-notification', requireAuth, requireRole('service'), async
       settings: messageSettings,
     });
 
-    return res.json({ ok: true, language, ...preview });
+    return res.json({ ok: true, language, ...preview, body: preview.display_body || preview.body });
   } catch (error) {
     console.error('POST /api/preview-notification error:', error);
     return res.status(500).json({
@@ -2295,7 +2341,7 @@ app.post('/api/notify/cost-proposal', requireAuth, requireRole('service'), async
 
       if (ticket.customer_email) {
         try {
-          await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody });
+          await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody, html: preview.html });
           await query(
             `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, subject, body, reply_token, provider)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
@@ -2342,7 +2388,7 @@ app.post('/api/notify/cost-proposal', requireAuth, requireRole('service'), async
 
       if (!delivery.sms_sent && ticket.customer_email) {
         try {
-          await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody });
+          await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody, html: preview.html });
           await query(
             `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, subject, body, reply_token, provider)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
@@ -2383,7 +2429,7 @@ app.post('/api/notify/cost-proposal', requireAuth, requireRole('service'), async
       if (!ticket.customer_email) {
         return res.status(400).json({ error: 'E-post saknas.' });
       }
-      await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody });
+      await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody, html: preview.html });
       await query(
         `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, subject, body, reply_token, provider)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
@@ -2466,7 +2512,7 @@ app.post('/api/notify/repair-ready', requireAuth, requireRole('service'), async 
 
       if (ticket.customer_email) {
         try {
-          await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody });
+          await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody, html: preview.html });
           await query(
             `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, subject, body, reply_token, provider)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
@@ -2513,7 +2559,7 @@ app.post('/api/notify/repair-ready', requireAuth, requireRole('service'), async 
 
       if (!delivery.sms_sent && ticket.customer_email) {
         try {
-          await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody });
+          await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody, html: preview.html });
           await query(
             `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, subject, body, reply_token, provider)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
@@ -2554,7 +2600,7 @@ app.post('/api/notify/repair-ready', requireAuth, requireRole('service'), async 
       if (!ticket.customer_email) {
         return res.status(400).json({ error: 'E-post saknas.' });
       }
-      await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody });
+      await sendEmail({ to: ticket.customer_email, subject: translatedSubject, body: translatedBody, html: preview.html });
       await query(
         `INSERT INTO message_logs (ticket_id, channel, direction, sender_user, to_number, subject, body, reply_token, provider)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
