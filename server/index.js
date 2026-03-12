@@ -241,6 +241,78 @@ const appendReplyGuidance = (body = '', language = 'sv', replyToken = '') => {
   return `${outboundStart}\n${bodyWithoutAnyMarker}\n\n${directReplyLine}\n${outboundEnd}\n${tokenLine}`.trim();
 };
 
+const buildFallbackActionChecklist = (sourceText = '') =>
+  String(sourceText || '')
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .flatMap((line) =>
+      line
+        .split(/(?<=[.!?])\s+/)
+        .map((part) => part.trim())
+        .filter(Boolean)
+    )
+    .map((line) => line.replace(/^[-*•]\s*/, ''))
+    .filter(Boolean)
+    .map((line) => `- ${line}`)
+    .join('\n');
+
+const standardizeActionsText = async (sourceText = '') => {
+  const normalizedText = String(sourceText || '').trim();
+  if (!normalizedText) return '';
+
+  const fallbackChecklist = buildFallbackActionChecklist(normalizedText);
+  if (!DEEPSEEK_API_KEY) {
+    return { standardized: fallbackChecklist || normalizedText, via: 'fallback' };
+  }
+
+  try {
+    const response = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: DEEPSEEK_MODEL,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'Convert planned repair actions into a concise performed-actions checklist. Keep the same language as input. Return plain text only with one bullet per line starting with "- ". Do not add explanations.',
+          },
+          {
+            role: 'user',
+            content: `Planned actions:\n${normalizedText}`,
+          },
+        ],
+        temperature: 0.1,
+      }),
+    });
+
+    if (!response.ok) {
+      const details = await response.text();
+      console.error('Standardize actions AI failed:', response.status, details);
+      return { standardized: fallbackChecklist || normalizedText, via: 'fallback' };
+    }
+
+    const data = await response.json();
+    const aiText = data?.choices?.[0]?.message?.content?.trim() || '';
+    const standardized =
+      aiText
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => (line.startsWith('- ') ? line : `- ${line.replace(/^[-*•]\s*/, '')}`))
+        .join('\n') || fallbackChecklist || normalizedText;
+
+    return { standardized, via: 'ai' };
+  } catch (error) {
+    console.error('standardizeActionsText error:', error);
+    return { standardized: fallbackChecklist || normalizedText, via: 'fallback' };
+  }
+};
+
 const extractTopReply = (rawMessage = '') => {
   const message = String(rawMessage || '').replace(/\r/g, '').trim();
   if (!message) return { text: '', method: 'empty', confidence: 'low', replyToken: null };
@@ -1860,66 +1932,8 @@ app.post('/api/tickets/:id/actions/standardize', requireAuth, requireRole('servi
       return res.status(404).json({ error: 'Ärende hittades inte.' });
     }
 
-    // Deterministic local fallback
-    const fallbackChecklist = sourceText
-      .split(/\n+/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .flatMap((line) =>
-        line
-          .split(/(?<=[.!?])\s+/)
-          .map((part) => part.trim())
-          .filter(Boolean)
-      )
-      .map((line) => line.replace(/^[-*•]\s*/, ''))
-      .filter(Boolean)
-      .map((line) => `- ${line}`)
-      .join('\n');
-
-    if (!DEEPSEEK_API_KEY) {
-      return res.json({ ok: true, standardized_actions: fallbackChecklist || sourceText, via: 'fallback' });
-    }
-
-    const response = await fetch('https://api.deepseek.com/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: DEEPSEEK_MODEL,
-        messages: [
-          {
-            role: 'system',
-            content:
-              'Convert planned repair actions into a concise performed-actions checklist. Keep the same language as input. Return plain text only with one bullet per line starting with "- ". Do not add explanations.',
-          },
-          {
-            role: 'user',
-            content: `Planned actions:\n${sourceText}`,
-          },
-        ],
-        temperature: 0.1,
-      }),
-    });
-
-    if (!response.ok) {
-      const details = await response.text();
-      console.error('Standardize actions AI failed:', response.status, details);
-      return res.json({ ok: true, standardized_actions: fallbackChecklist || sourceText, via: 'fallback' });
-    }
-
-    const data = await response.json();
-    const aiText = data?.choices?.[0]?.message?.content?.trim() || '';
-    const standardized =
-      aiText
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .map((line) => (line.startsWith('- ') ? line : `- ${line.replace(/^[-*•]\s*/, '')}`))
-        .join('\n') || fallbackChecklist || sourceText;
-
-    return res.json({ ok: true, standardized_actions: standardized, via: 'ai' });
+    const { standardized, via } = await standardizeActionsText(sourceText);
+    return res.json({ ok: true, standardized_actions: standardized, via });
   } catch (error) {
     console.error('POST /api/tickets/:id/actions/standardize error:', error);
     return res.status(500).json({ error: 'Kunde inte standardisera åtgärder.' });
@@ -2730,16 +2744,21 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
       }
     }
     if (decision === 'yes') {
+      const autoWorkDone = ticket.work_done_summary?.trim() ? ticket.work_done_summary.trim() : (await standardizeActionsText(ticket.diagnosis || '')).standardized;
       await query(
         `UPDATE service_tickets
          SET cost_proposal_approved = true,
              status = $1,
+             work_done_summary = CASE
+               WHEN COALESCE(NULLIF(work_done_summary, ''), '') <> '' THEN work_done_summary
+               ELSE $4
+             END,
              last_customer_decision = 'approved',
              last_customer_response_text = $3,
              last_customer_response_channel = 'email',
              last_customer_response_at = NOW()
          WHERE id = $2`,
-        ['Kostnadsförslag godkänt', ticket.id, inboundReplyText]
+        ['Kostnadsförslag godkänt', ticket.id, inboundReplyText, autoWorkDone]
       );
       try {
         await sendDecisionAcknowledgement({
@@ -2840,16 +2859,21 @@ app.post('/api/webhooks/46elks', async (req, res) => {
 
     const decision = parseApprovalDecision(message);
     if (decision === 'yes') {
+      const autoWorkDone = ticket.work_done_summary?.trim() ? ticket.work_done_summary.trim() : (await standardizeActionsText(ticket.diagnosis || '')).standardized;
       await query(
         `UPDATE service_tickets
          SET cost_proposal_approved = true,
              status = $1,
+             work_done_summary = CASE
+               WHEN COALESCE(NULLIF(work_done_summary, ''), '') <> '' THEN work_done_summary
+               ELSE $4
+             END,
              last_customer_decision = 'approved',
              last_customer_response_text = $3,
              last_customer_response_channel = 'sms',
              last_customer_response_at = NOW()
          WHERE id = $2`,
-        ['Kostnadsförslag godkänt', ticket.id, message]
+        ['Kostnadsförslag godkänt', ticket.id, message, autoWorkDone]
       );
       try {
         await sendDecisionAcknowledgement({
