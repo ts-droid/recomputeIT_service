@@ -195,8 +195,22 @@ const REPLY_HINT_BY_LANGUAGE = {
   uk: 'Напишіть свою відповідь у рядку вище.',
 };
 
+const REPLY_DIRECT_BY_LANGUAGE = {
+  sv: 'Du kan svara direkt på detta mejl.',
+  en: 'You can reply directly to this email.',
+  ar: 'يمكنك الرد مباشرة على هذا البريد الإلكتروني.',
+  es: 'Puede responder directamente a este correo electrónico.',
+  fi: 'Voit vastata tähän sähköpostiin suoraan.',
+  ku: 'Tu dikarî rasterast bersiva vê e-nameyê bidî.',
+  tr: 'Bu e-postayı doğrudan yanıtlayabilirsiniz.',
+  pl: 'Możesz odpowiedzieć bezpośrednio na tę wiadomość e-mail.',
+  uk: 'Ви можете відповісти безпосередньо на цей електронний лист.',
+};
+
 const OUTBOUND_BLOCK_DELIMITER = '----------<>----------';
-const EMAIL_REPLY_MARKERS = Object.values(REPLY_MARKER_BY_LANGUAGE).map((line) => line.toLowerCase());
+const EMAIL_REPLY_MARKERS = [...Object.values(REPLY_MARKER_BY_LANGUAGE), ...Object.values(REPLY_HINT_BY_LANGUAGE)].map((line) =>
+  line.toLowerCase()
+);
 const REPLY_TOKEN_REGEX = /RECOMPUTE[_-]?REPLY[_-]?START[:\s_-]*([a-z0-9-]{6,64})/i;
 const OUTBOUND_BLOCK_START_REGEX = /RECOMPUTE[_-]?OUTBOUND[_-]?START[:\s_-]*([a-z0-9-]{6,64})/i;
 const OUTBOUND_BLOCK_END_REGEX = /RECOMPUTE[_-]?OUTBOUND[_-]?END[:\s_-]*([a-z0-9-]{6,64})/i;
@@ -204,6 +218,7 @@ const QUOTE_HEADER_REGEX = /(^|\n)\s*(on .+wrote:|den .+skrev:|från:|from:|skic
 
 const getReplyMarkerLine = (language = 'sv') => REPLY_MARKER_BY_LANGUAGE[language] || REPLY_MARKER_BY_LANGUAGE.sv;
 const getReplyHintLine = (language = 'sv') => REPLY_HINT_BY_LANGUAGE[language] || REPLY_HINT_BY_LANGUAGE.sv;
+const getReplyDirectLine = (language = 'sv') => REPLY_DIRECT_BY_LANGUAGE[language] || REPLY_DIRECT_BY_LANGUAGE.sv;
 const getReplyTokenLine = (replyToken = '') =>
   replyToken ? `--- RECOMPUTE_REPLY_START:${replyToken} ---` : '--- RECOMPUTE_REPLY_START ---';
 const getOutboundStartLine = (replyToken = '') =>
@@ -213,8 +228,7 @@ const getOutboundEndLine = (replyToken = '') =>
 const generateReplyToken = () => crypto.randomBytes(6).toString('hex');
 
 const appendReplyGuidance = (body = '', language = 'sv', replyToken = '') => {
-  const marker = getReplyMarkerLine(language);
-  const hint = getReplyHintLine(language);
+  const directReplyLine = getReplyDirectLine(language);
   const tokenLine = getReplyTokenLine(replyToken);
   const outboundStart = getOutboundStartLine(replyToken);
   const outboundEnd = getOutboundEndLine(replyToken);
@@ -224,7 +238,7 @@ const appendReplyGuidance = (body = '', language = 'sv', replyToken = '') => {
     .filter((line) => !EMAIL_REPLY_MARKERS.includes(line.trim().toLowerCase()))
     .join('\n')
     .trim();
-  return `${outboundStart}\n${bodyWithoutAnyMarker}\n${outboundEnd}\n\n${marker}\n${hint}\n${tokenLine}`.trim();
+  return `${outboundStart}\n${bodyWithoutAnyMarker}\n\n${directReplyLine}\n${outboundEnd}\n${tokenLine}`.trim();
 };
 
 const extractTopReply = (rawMessage = '') => {
