@@ -86,6 +86,8 @@ export function AdminPanel() {
   const [messageSettings, setMessageSettings] = useState(normalizeSettingsPayload());
   const [savingSettings, setSavingSettings] = useState(false);
   const [translatingSettings, setTranslatingSettings] = useState(false);
+  const [adminTab, setAdminTab] = useState('reports');
+  const [messageTab, setMessageTab] = useState('footers');
   const [form, setForm] = useState({
     email: '',
     password: '',
@@ -339,12 +341,23 @@ export function AdminPanel() {
         </Button>
       </div>
 
-      <Tabs defaultValue="reports" className="w-full">
-        <TabsList className="bg-gray-100">
-          <TabsTrigger value="reports">Rapporter</TabsTrigger>
-          <TabsTrigger value="users">Användare</TabsTrigger>
-          <TabsTrigger value="messages">Meddelanden</TabsTrigger>
-        </TabsList>
+      <Tabs value={adminTab} onValueChange={setAdminTab} className="w-full">
+        <div className="flex flex-wrap items-center gap-3">
+          <TabsList className="bg-gray-100">
+            <TabsTrigger value="reports">Rapporter</TabsTrigger>
+            <TabsTrigger value="users">Användare</TabsTrigger>
+            <TabsTrigger value="messages">Meddelanden</TabsTrigger>
+          </TabsList>
+          {adminTab === 'messages' && (
+            <Tabs value={messageTab} onValueChange={setMessageTab}>
+              <TabsList className="bg-gray-100">
+                <TabsTrigger value="footers">Footers</TabsTrigger>
+                <TabsTrigger value="templates">Standardtexter</TabsTrigger>
+                <TabsTrigger value="ai">AI-prompter</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          )}
+        </div>
 
         <TabsContent value="reports" className="mt-6">
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 mb-8">
@@ -435,14 +448,8 @@ export function AdminPanel() {
               Fyll i svenska/engelska och låt systemet auto-översätta samt cacha översättningar.
             </p>
           </div>
-          <Tabs defaultValue="footers" className="w-full">
-            <TabsList className="bg-gray-100">
-              <TabsTrigger value="footers">Footers</TabsTrigger>
-              <TabsTrigger value="templates">Standardtexter</TabsTrigger>
-              <TabsTrigger value="ai">AI-prompter</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="footers" className="mt-6">
+          <Tabs value={messageTab} onValueChange={setMessageTab} className="w-full">
+            <TabsContent value="footers" className="mt-2">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="border border-gray-200 rounded-xl p-4">
                   <h3 className="text-lg font-semibold text-gray-800 mb-3">E-postfooter</h3>
@@ -477,7 +484,7 @@ export function AdminPanel() {
               </div>
             </TabsContent>
 
-            <TabsContent value="templates" className="mt-6">
+            <TabsContent value="templates" className="mt-2">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="space-y-6">
                   <div className="border border-gray-200 rounded-xl p-4">
@@ -613,7 +620,7 @@ export function AdminPanel() {
               </div>
             </TabsContent>
 
-            <TabsContent value="ai" className="mt-6">
+            <TabsContent value="ai" className="mt-2">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="border border-gray-200 rounded-xl p-4">
                   <h3 className="text-lg font-semibold text-gray-800 mb-3">AI-prompt: Svarshjälp</h3>
