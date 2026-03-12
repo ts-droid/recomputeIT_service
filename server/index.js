@@ -195,27 +195,36 @@ const REPLY_HINT_BY_LANGUAGE = {
   uk: 'Напишіть свою відповідь у рядку вище.',
 };
 
+const OUTBOUND_BLOCK_DELIMITER = '----------<>----------';
 const EMAIL_REPLY_MARKERS = Object.values(REPLY_MARKER_BY_LANGUAGE).map((line) => line.toLowerCase());
 const REPLY_TOKEN_REGEX = /RECOMPUTE[_-]?REPLY[_-]?START[:\s_-]*([a-z0-9-]{6,64})/i;
+const OUTBOUND_BLOCK_START_REGEX = /RECOMPUTE[_-]?OUTBOUND[_-]?START[:\s_-]*([a-z0-9-]{6,64})/i;
+const OUTBOUND_BLOCK_END_REGEX = /RECOMPUTE[_-]?OUTBOUND[_-]?END[:\s_-]*([a-z0-9-]{6,64})/i;
 const QUOTE_HEADER_REGEX = /(^|\n)\s*(on .+wrote:|den .+skrev:|från:|from:|skickat:|sent:|till:|to:|am .+schrieb|el .+escribi[oó]|le .+a écrit)/i;
 
 const getReplyMarkerLine = (language = 'sv') => REPLY_MARKER_BY_LANGUAGE[language] || REPLY_MARKER_BY_LANGUAGE.sv;
 const getReplyHintLine = (language = 'sv') => REPLY_HINT_BY_LANGUAGE[language] || REPLY_HINT_BY_LANGUAGE.sv;
 const getReplyTokenLine = (replyToken = '') =>
   replyToken ? `--- RECOMPUTE_REPLY_START:${replyToken} ---` : '--- RECOMPUTE_REPLY_START ---';
+const getOutboundStartLine = (replyToken = '') =>
+  `${OUTBOUND_BLOCK_DELIMITER} RECOMPUTE_OUTBOUND_START${replyToken ? `:${replyToken}` : ''} ${OUTBOUND_BLOCK_DELIMITER}`;
+const getOutboundEndLine = (replyToken = '') =>
+  `${OUTBOUND_BLOCK_DELIMITER} RECOMPUTE_OUTBOUND_END${replyToken ? `:${replyToken}` : ''} ${OUTBOUND_BLOCK_DELIMITER}`;
 const generateReplyToken = () => crypto.randomBytes(6).toString('hex');
 
 const appendReplyGuidance = (body = '', language = 'sv', replyToken = '') => {
   const marker = getReplyMarkerLine(language);
   const hint = getReplyHintLine(language);
   const tokenLine = getReplyTokenLine(replyToken);
+  const outboundStart = getOutboundStartLine(replyToken);
+  const outboundEnd = getOutboundEndLine(replyToken);
   const normalizedBody = String(body || '').trim();
   const bodyWithoutAnyMarker = normalizedBody
     .split('\n')
     .filter((line) => !EMAIL_REPLY_MARKERS.includes(line.trim().toLowerCase()))
     .join('\n')
     .trim();
-  return `${bodyWithoutAnyMarker}\n\n${marker}\n${hint}\n${tokenLine}`.trim();
+  return `${outboundStart}\n${bodyWithoutAnyMarker}\n${outboundEnd}\n\n${marker}\n${hint}\n${tokenLine}`.trim();
 };
 
 const extractTopReply = (rawMessage = '') => {
@@ -230,6 +239,12 @@ const extractTopReply = (rawMessage = '') => {
 
   const lower = message.toLowerCase();
   let cutoff = lower.length;
+
+  const outboundStartMatch = message.match(OUTBOUND_BLOCK_START_REGEX);
+  if (outboundStartMatch?.index !== undefined) {
+    const text = message.slice(0, outboundStartMatch.index).trim() || message;
+    return { text, method: 'outbound_start', confidence: 'high', replyToken: outboundStartMatch[1] || null };
+  }
 
   for (const marker of EMAIL_REPLY_MARKERS) {
     const idx = lower.indexOf(marker);
@@ -274,8 +289,11 @@ const cleanVisibleReplyText = (raw = '') => {
     const lower = trimmed.toLowerCase();
 
     if (REPLY_TOKEN_REGEX.test(trimmed)) break;
+    if (OUTBOUND_BLOCK_START_REGEX.test(trimmed)) break;
+    if (OUTBOUND_BLOCK_END_REGEX.test(trimmed)) break;
     if (EMAIL_REPLY_MARKERS.includes(lower)) break;
     if (/^---\s*recompute[_-]?reply[_-]?start/i.test(trimmed)) break;
+    if (/^[-<> ]*recompute[_-]?outbound[_-]?(start|end)/i.test(trimmed)) break;
     if (/^[-_]{2,}\s*(svara ovanf[oö]r denna linje|reply above this line)\s*[-_]{2,}$/i.test(trimmed)) break;
     if (QUOTE_HEADER_REGEX.test(`\n${trimmed}`)) break;
     if (/^(från:|from:|skickat:|sent:|till:|to:|ämne:|subject:)/i.test(trimmed)) break;
