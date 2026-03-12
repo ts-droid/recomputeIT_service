@@ -2753,6 +2753,10 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
                WHEN COALESCE(NULLIF(work_done_summary, ''), '') <> '' THEN work_done_summary
                ELSE $4
              END,
+             final_cost = CASE
+               WHEN COALESCE(NULLIF(final_cost, ''), '') <> '' THEN final_cost
+               ELSE diagnosis_fee
+             END,
              last_customer_decision = 'approved',
              last_customer_response_text = $3,
              last_customer_response_channel = 'email',
@@ -2867,6 +2871,10 @@ app.post('/api/webhooks/46elks', async (req, res) => {
              work_done_summary = CASE
                WHEN COALESCE(NULLIF(work_done_summary, ''), '') <> '' THEN work_done_summary
                ELSE $4
+             END,
+             final_cost = CASE
+               WHEN COALESCE(NULLIF(final_cost, ''), '') <> '' THEN final_cost
+               ELSE diagnosis_fee
              END,
              last_customer_decision = 'approved',
              last_customer_response_text = $3,
