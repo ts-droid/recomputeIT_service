@@ -2845,7 +2845,7 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
       }
     }
     if (decision === 'yes') {
-      const autoWorkDone = ticket.work_done_summary?.trim() ? ticket.work_done_summary.trim() : (await standardizeActionsText(ticket.diagnosis || '')).standardized;
+      const autoWorkDone = ticket.work_done_summary?.trim() ? ticket.work_done_summary.trim() : (await standardizeActionsText(ticket.planned_actions || ticket.diagnosis || '')).standardized;
       await query(
         `UPDATE service_tickets
          SET cost_proposal_approved = true,
@@ -2951,14 +2951,14 @@ app.post('/api/webhooks/46elks', async (req, res) => {
 
     const ticket = rows[0];
     const messageWithSwedish = await maybeAppendSwedishTranslation(ticket, message);
-    const dedupeKey = providerId || `${ticket?.id || 'unknown'}:${normalized}:${messageWithSwedish}`;
+    const dedupeKey = providerId || `${ticket?.id || 'unknown'}:${normalized}:${message}`;
     await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [dedupeKey]);
 
     const duplicateInbound = await isDuplicateInboundSms(
       {
         ticketId: ticket?.id || null,
         from,
-        body: messageWithSwedish,
+        body: message,
         providerId,
       },
       client.query.bind(client)
@@ -2991,7 +2991,7 @@ app.post('/api/webhooks/46elks', async (req, res) => {
     if (decision === 'yes') {
       const autoWorkDone = ticket.work_done_summary?.trim()
         ? ticket.work_done_summary.trim()
-        : (await standardizeActionsText(ticket.diagnosis || '')).standardized;
+        : (await standardizeActionsText(ticket.planned_actions || ticket.diagnosis || '')).standardized;
       await client.query(
         `UPDATE service_tickets
          SET cost_proposal_approved = true,

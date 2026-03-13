@@ -310,7 +310,7 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
   const handleApprovalChange = async (checked) => {
     setIsApproving(true);
     const newStatus = checked ? 'Kostnadsförslag godkänt' : 'Väntar på kund';
-    const sourceActions = String(currentDiagnosis || ticket.diagnosis || '').trim();
+    const sourceActions = String(ticket.planned_actions || currentDiagnosis || ticket.diagnosis || '').trim();
 
     if (checked) {
         toast({ title: "Godkänner...", description: "Vi fyller i utförda åtgärder och uppdaterar ärendet." });
