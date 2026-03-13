@@ -646,7 +646,6 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
                     </Label>
                     <Textarea
                       id={`planned-actions-${ticket.id}`}
-                      value={currentDiagnosis || ''}
                       value={plannedActions}
                       onChange={(e) => setPlannedActions(e.target.value)}
                       onBlur={() => handleFieldUpdate('planned_actions', plannedActions)}
