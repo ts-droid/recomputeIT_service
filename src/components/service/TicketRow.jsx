@@ -314,13 +314,13 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
   const handleApprovalChange = async (checked) => {
     setIsApproving(true);
     const newStatus = checked ? 'Kostnadsförslag godkänt' : 'Väntar på kund';
-    const sourceActions = String(ticket.planned_actions || currentDiagnosis || ticket.diagnosis || '').trim();
+    const sourceActions = String(plannedActions || ticket.planned_actions || currentDiagnosis || ticket.diagnosis || '').trim();
 
     if (checked) {
         toast({ title: "Godkänner...", description: "Vi fyller i utförda åtgärder och uppdaterar ärendet." });
         const copiedWorkDone =
           !workDoneSummary.trim() && sourceActions ? await standardizePlannedActions(sourceActions) : workDoneSummary;
-        const resolvedFinalCost = String(finalCost || ticket.cost_proposal || '').trim();
+        const resolvedFinalCost = String(finalCost || costProposal || ticket.cost_proposal || '').trim();
 
         const updates = {
             cost_proposal_approved: true,
@@ -645,10 +645,11 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
                       Planerade åtgärder
                     </Label>
                     <Textarea
-                      id={`diagnosis-${ticket.id}`}
+                      id={`planned-actions-${ticket.id}`}
                       value={currentDiagnosis || ''}
-                      onChange={(e) => setCurrentDiagnosis(e.target.value)}
-                      onBlur={() => handleFieldUpdate('diagnosis', currentDiagnosis || '')}
+                      value={plannedActions}
+                      onChange={(e) => setPlannedActions(e.target.value)}
+                      onBlur={() => handleFieldUpdate('planned_actions', plannedActions)}
                       placeholder="Beskriv planerade åtgärder..."
                       className="bg-white min-h-[100px]"
                       disabled={!canEdit}
@@ -661,9 +662,9 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
                     </Label>
                     <Input
                       id={`cost-proposal-${ticket.id}`}
-                      value={finalCost}
-                      onChange={(e) => setFinalCost(e.target.value)}
-                      onBlur={() => handleFieldUpdate('final_cost', finalCost)}
+                      value={costProposal}
+                      onChange={(e) => setCostProposal(e.target.value)}
+                      onBlur={() => handleFieldUpdate('cost_proposal', costProposal)}
                       placeholder="t.ex. 1299"
                       className="bg-white"
                       disabled={!canEdit}
