@@ -105,7 +105,7 @@ const cleanChatBody = (body = '') => {
   return cleaned.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 };
 
-export const TicketRow = ({ ticket, onUpdate }) => {
+export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
   const { role, token } = useSupabaseAuth();
   const canEdit = role !== 'base';
   const [isOpen, setIsOpen] = useState(false);
@@ -184,8 +184,16 @@ export const TicketRow = ({ ticket, onUpdate }) => {
   useEffect(() => {
     if (isOpen) {
       loadMessages();
+      onRefreshTickets?.();
+      const pollInterval = window.setInterval(() => {
+        loadMessages();
+        onRefreshTickets?.();
+      }, 8000);
+
+      return () => window.clearInterval(pollInterval);
     }
-  }, [isOpen, loadMessages]);
+    return undefined;
+  }, [isOpen, loadMessages, onRefreshTickets]);
 
   const handleSendManualEmail = async () => {
     if (!canEdit) return;

@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initDb } from './init.js';
-import { query } from './db.js';
+import { getClient, query } from './db.js';
 import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import nodemailer from 'nodemailer';
@@ -293,9 +293,12 @@ const getInboundSmsProviderId = (payload = {}) => {
   return found ? String(found).trim() : null;
 };
 
-const isDuplicateInboundSms = async ({ ticketId = null, from = '', body = '', providerId = null }) => {
+const isDuplicateInboundSms = async (
+  { ticketId = null, from = '', body = '', providerId = null },
+  dbQuery = query
+) => {
   if (providerId) {
-    const existing = await query(
+    const existing = await dbQuery(
       `SELECT id FROM message_logs
        WHERE channel = 'sms'
          AND direction = 'inbound'
@@ -307,7 +310,7 @@ const isDuplicateInboundSms = async ({ ticketId = null, from = '', body = '', pr
     if (existing.rowCount > 0) return true;
   }
 
-  const duplicate = await query(
+  const duplicate = await dbQuery(
     `SELECT id FROM message_logs
      WHERE channel = 'sms'
        AND direction = 'inbound'
@@ -2923,6 +2926,7 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
 });
 
 app.post('/api/webhooks/46elks', async (req, res) => {
+  let client;
   try {
     if (ELKS_WEBHOOK_SECRET && req.query.secret !== ELKS_WEBHOOK_SECRET) {
       return res.status(401).json({ error: 'Invalid webhook secret' });
@@ -2936,47 +2940,63 @@ app.post('/api/webhooks/46elks', async (req, res) => {
       return res.status(400).json({ error: 'Invalid payload' });
     }
 
+    client = await getClient();
+    await client.query('BEGIN');
+
     const normalized = normalizePhone(from);
-    const { rows } = await query(
+    const { rows } = await client.query(
       `SELECT * FROM service_tickets WHERE customer_phone_normalized = $1 ORDER BY created_at DESC LIMIT 1`,
       [normalized]
     );
 
     const ticket = rows[0];
     const messageWithSwedish = await maybeAppendSwedishTranslation(ticket, message);
-    const duplicateInbound = await isDuplicateInboundSms({
-      ticketId: ticket?.id || null,
-      from,
-      body: messageWithSwedish,
-      providerId,
-    });
+    const dedupeKey = providerId || `${ticket?.id || 'unknown'}:${normalized}:${messageWithSwedish}`;
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [dedupeKey]);
+
+    const duplicateInbound = await isDuplicateInboundSms(
+      {
+        ticketId: ticket?.id || null,
+        from,
+        body: messageWithSwedish,
+        providerId,
+      },
+      client.query.bind(client)
+    );
 
     if (duplicateInbound) {
+      await client.query('COMMIT');
       return res.json({ ok: true, duplicate: true });
     }
 
     if (!ticket) {
-      await query(
+      await client.query(
         `INSERT INTO message_logs (channel, direction, from_number, body, provider, provider_id)
          VALUES ($1,$2,$3,$4,$5,$6)`,
         ['sms', 'inbound', from, messageWithSwedish, '46elks', providerId]
       );
+      await client.query('COMMIT');
       return res.json({ ok: true });
     }
 
-    await query(
+    await client.query(
       `INSERT INTO message_logs (ticket_id, channel, direction, from_number, body, provider, provider_id)
        VALUES ($1,$2,$3,$4,$5,$6,$7)`,
       [ticket.id, 'sms', 'inbound', from, messageWithSwedish, '46elks', providerId]
     );
 
     const decision = parseApprovalDecision(message);
+    console.log('46elks inbound decision parsed', { ticketId: ticket.id, rawMessage: message, decision, providerId });
+
     if (decision === 'yes') {
-      const autoWorkDone = ticket.work_done_summary?.trim() ? ticket.work_done_summary.trim() : (await standardizeActionsText(ticket.diagnosis || '')).standardized;
-      await query(
+      const autoWorkDone = ticket.work_done_summary?.trim()
+        ? ticket.work_done_summary.trim()
+        : (await standardizeActionsText(ticket.diagnosis || '')).standardized;
+      await client.query(
         `UPDATE service_tickets
          SET cost_proposal_approved = true,
              status = $1,
+             has_new_customer_message = TRUE,
              work_done_summary = CASE
                WHEN COALESCE(NULLIF(work_done_summary, ''), '') <> '' THEN work_done_summary
                ELSE $4
@@ -2992,6 +3012,35 @@ app.post('/api/webhooks/46elks', async (req, res) => {
          WHERE id = $2`,
         ['Kostnadsförslag godkänt', ticket.id, message, autoWorkDone]
       );
+    } else if (decision === 'no') {
+      await client.query(
+        `UPDATE service_tickets
+         SET cost_proposal_approved = false,
+             status = $1,
+             has_new_customer_message = TRUE,
+             last_customer_decision = 'declined',
+             last_customer_response_text = $3,
+             last_customer_response_channel = 'sms',
+             last_customer_response_at = NOW()
+         WHERE id = $2`,
+        ['Kostnadsförslag nekat', ticket.id, message]
+      );
+    } else {
+      await client.query(
+        `UPDATE service_tickets
+         SET has_new_customer_message = TRUE,
+             last_customer_decision = 'pending',
+             last_customer_response_text = $2,
+             last_customer_response_channel = 'sms',
+             last_customer_response_at = NOW()
+         WHERE id = $1`,
+        [ticket.id, message]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    if (decision === 'yes') {
       try {
         await sendDecisionAcknowledgement({
           ticket,
@@ -3003,17 +3052,6 @@ app.post('/api/webhooks/46elks', async (req, res) => {
         console.error('SMS acknowledgement send failed (yes):', error);
       }
     } else if (decision === 'no') {
-      await query(
-        `UPDATE service_tickets
-         SET cost_proposal_approved = false,
-             status = $1,
-             last_customer_decision = 'declined',
-             last_customer_response_text = $3,
-             last_customer_response_channel = 'sms',
-             last_customer_response_at = NOW()
-         WHERE id = $2`,
-        ['Kostnadsförslag nekat', ticket.id, message]
-      );
       try {
         await sendDecisionAcknowledgement({
           ticket,
@@ -3025,15 +3063,6 @@ app.post('/api/webhooks/46elks', async (req, res) => {
         console.error('SMS acknowledgement send failed (no):', error);
       }
     } else {
-      await query(
-        `UPDATE service_tickets
-         SET last_customer_decision = 'pending',
-             last_customer_response_text = $2,
-             last_customer_response_channel = 'sms',
-             last_customer_response_at = NOW()
-         WHERE id = $1`,
-        [ticket.id, message]
-      );
       try {
         await sendDecisionClarification({
           ticket,
@@ -3047,8 +3076,17 @@ app.post('/api/webhooks/46elks', async (req, res) => {
 
     return res.json({ ok: true, decision });
   } catch (error) {
+    if (client) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        console.error('46elks rollback failed:', rollbackError);
+      }
+    }
     console.error('46elks webhook error:', error);
     return res.status(500).json({ error: 'Webhook error' });
+  } finally {
+    client?.release();
   }
 });
 

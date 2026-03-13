@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { TicketRow } from '@/components/service/TicketRow';
 
 export function ServiceRegister() {
-  const { tickets, loading, updateTicket } = useServiceTickets();
+  const { tickets, loading, updateTicket, refreshTickets } = useServiceTickets();
   const [searchTerm, setSearchTerm] = useState('');
   const [showCompleted, setShowCompleted] = useState(false);
 
@@ -74,7 +74,12 @@ export function ServiceRegister() {
         <div className="p-2">
           {filteredTickets.length > 0 ? (
             filteredTickets.map(ticket => (
-              <TicketRow key={ticket.id} ticket={ticket} onUpdate={updateTicket} />
+              <TicketRow
+                key={ticket.id}
+                ticket={ticket}
+                onUpdate={updateTicket}
+                onRefreshTickets={refreshTickets}
+              />
             ))
           ) : (
             <div className="text-center p-12 text-gray-500">
