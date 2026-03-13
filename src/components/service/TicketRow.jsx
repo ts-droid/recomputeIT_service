@@ -110,6 +110,8 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
   const canEdit = role !== 'base';
   const [isOpen, setIsOpen] = useState(false);
   const [internalNotes, setInternalNotes] = useState('');
+  const [plannedActions, setPlannedActions] = useState('');
+  const [costProposal, setCostProposal] = useState('');
   const [workDoneSummary, setWorkDoneSummary] = useState('');
   const [finalCost, setFinalCost] = useState('');
   const [currentDiagnosis, setCurrentDiagnosis] = useState(null);
@@ -154,6 +156,8 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
   );
 
   useEffect(() => {
+    setPlannedActions(ticket.planned_actions || '');
+    setCostProposal(ticket.cost_proposal || '');
     setWorkDoneSummary(ticket.work_done_summary || '');
     setFinalCost(ticket.final_cost || '');
     setInternalNotes(ticket.internal_notes || '');
@@ -364,7 +368,10 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
     }
 
     if (templateType === 'kostnadsforslag') {
-      await onUpdate(ticket.id, { diagnosis: currentDiagnosis || '', final_cost: finalCost || '' });
+      await onUpdate(ticket.id, {
+        planned_actions: plannedActions || '',
+        cost_proposal: costProposal || '',
+      });
     }
 
     const newStatus = templateType === 'reparationFardig' ? 'Färdig' : 'Väntar på kund';
@@ -617,7 +624,7 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
                         <Button
                           size="icon"
                           onClick={handleSendManualEmail}
-                          disabled={isSendingManual || !ticket.customer_email}
+                          disabled={isSendingManual || (!ticket.customer_email && !ticket.customer_phone)}
                           className="h-10 w-10 shrink-0"
                           title="Skicka"
                         >
