@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS service_tickets (
   disclaimer_language TEXT DEFAULT 'sv',
   status TEXT DEFAULT 'Nytt',
   user_id TEXT,
+  cost_proposal TEXT,
   cost_proposal_approved BOOLEAN NOT NULL DEFAULT FALSE,
   internal_notes TEXT,
   work_done_summary TEXT,

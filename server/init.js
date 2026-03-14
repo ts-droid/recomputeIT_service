@@ -169,6 +169,7 @@ export async function initDb() {
   await query(`CREATE INDEX IF NOT EXISTS message_logs_tenant_id_idx ON message_logs (tenant_id)`);
 
   // 7. Other column migrations
+  await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS cost_proposal TEXT`);
   await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ`);
   await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS customer_notified_at TIMESTAMPTZ`);
   await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS picked_up_at TIMESTAMPTZ`);
