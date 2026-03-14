@@ -43,6 +43,7 @@ export const ROLE_RANK = Object.freeze({
   base: 1,
   service: 2,
   admin: 3,
+  superadmin: 4,
 });
 
 export const canAccess = (role, minimumRole) =>

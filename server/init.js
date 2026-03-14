@@ -226,4 +226,22 @@ export async function initDb() {
       console.log('Bootstrap admin user created.');
     }
   }
+
+  // 7. Bootstrap superadmin user
+  const superadminEmail = process.env.BOOTSTRAP_SUPERADMIN_EMAIL;
+  const superadminPassword = process.env.BOOTSTRAP_SUPERADMIN_PASSWORD;
+  if (superadminEmail && superadminPassword) {
+    const { rows } = await query(
+      'SELECT id FROM users WHERE email = $1 AND tenant_id = $2',
+      [superadminEmail, defaultTenantId]
+    );
+    if (rows.length === 0) {
+      const hash = await bcrypt.hash(superadminPassword, 10);
+      await query(
+        'INSERT INTO users (tenant_id, email, password_hash, role, name) VALUES ($1, $2, $3, $4, $5)',
+        [defaultTenantId, superadminEmail, hash, 'superadmin', 'Super Admin']
+      );
+      console.log('Bootstrap superadmin user created.');
+    }
+  }
 }

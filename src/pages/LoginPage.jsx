@@ -13,7 +13,7 @@ import { getDisplayVersion } from '@/lib/version';
 const APP_VERSION = getDisplayVersion();
 
 export default function LoginPage() {
-  const { signInWithEmail, session } = useSupabaseAuth();
+  const { signInWithEmail, session, role } = useSupabaseAuth();
   const { t } = useUiLanguage();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -27,9 +27,14 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (session) {
-      navigate(from, { replace: true });
+      // Redirect superadmin to the super admin panel by default
+      if (role === 'superadmin' && from === '/dashboard') {
+        navigate('/superadmin', { replace: true });
+      } else {
+        navigate(from, { replace: true });
+      }
     }
-  }, [session, navigate, from]);
+  }, [session, navigate, from, role]);
 
   const handleLogin = async (e) => {
     e.preventDefault();

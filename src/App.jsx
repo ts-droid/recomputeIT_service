@@ -7,6 +7,7 @@ import { UiLanguageProvider } from '@/contexts/UiLanguageContext';
 import PublicRegistrationPage from '@/pages/PublicRegistrationPage';
 import DashboardPage from '@/pages/DashboardPage';
 import LoginPage from '@/pages/LoginPage';
+import SuperAdminPage from '@/pages/SuperAdminPage';
 import { Loader2 } from 'lucide-react';
 
 function ProtectedRoute({ children }) {
@@ -44,13 +45,21 @@ function AppContent() {
         <Routes>
           <Route path="/" element={<PublicRegistrationPage />} />
           <Route path="/login" element={<LoginPage />} />
-          <Route 
-            path="/dashboard" 
+          <Route
+            path="/dashboard"
             element={
               <ProtectedRoute>
                 <DashboardPage />
               </ProtectedRoute>
-            } 
+            }
+          />
+          <Route
+            path="/superadmin"
+            element={
+              <ProtectedRoute>
+                <SuperAdminPage />
+              </ProtectedRoute>
+            }
           />
         </Routes>
         <Toaster />

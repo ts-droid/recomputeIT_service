@@ -4,14 +4,14 @@ import { useSupabaseAuth } from '@/contexts/SupabaseAuthContext';
 import { useUiLanguage } from '@/contexts/UiLanguageContext';
 import { ServiceRegister } from '@/components/ServiceRegister';
 import { AdminPanel } from '@/components/admin/AdminPanel';
-import { LogOut, PlusCircle } from 'lucide-react';
+import { LogOut, PlusCircle, Shield } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { getDisplayVersion } from '@/lib/version';
 
 const APP_VERSION = getDisplayVersion();
 
-const Header = ({ onSignOut, user, t }) => (
+const Header = ({ onSignOut, user, role, t }) => (
   <header className="bg-white shadow-md sticky top-0 z-50">
     <div className="container mx-auto px-4 sm:px-6 lg:px-8">
       <div className="flex justify-between items-center h-20">
@@ -25,6 +25,13 @@ const Header = ({ onSignOut, user, t }) => (
           <span className="text-[11px] text-gray-500 bg-white/80 border border-gray-200 rounded-full px-2 py-0.5 hidden sm:inline-flex">
             v{APP_VERSION}
           </span>
+          {role === 'superadmin' && (
+            <Link to="/superadmin">
+              <Button variant="outline" className="text-slate-600 hover:bg-slate-100 border-slate-300 gap-2">
+                <Shield size={16} /> Super Admin
+              </Button>
+            </Link>
+          )}
           <Button onClick={onSignOut} variant="outline" className="text-gray-600 hover:bg-gray-100 border-gray-300 gap-2">
             <LogOut size={16} /> {t.dashboard.logout}
           </Button>
@@ -40,7 +47,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header onSignOut={signOut} user={user} t={t} />
+      <Header onSignOut={signOut} user={user} role={role} t={t} />
       <main className="container mx-auto p-4 md:p-8">
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -62,7 +69,7 @@ export default function DashboardPage() {
         </motion.div>
 
         <ServiceRegister />
-        {role === 'admin' ? <AdminPanel /> : null}
+        {(role === 'admin' || role === 'superadmin') ? <AdminPanel /> : null}
       </main>
     </div>
   );

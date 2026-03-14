@@ -11,6 +11,7 @@ import ticketRoutes from './routes/tickets.js';
 import notificationRoutes from './routes/notifications.js';
 import webhookRoutes from './routes/webhooks.js';
 import tenantRoutes from './routes/tenants.js';
+import superadminRoutes from './routes/superadmin.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -62,6 +63,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/tickets', ticketRoutes);
 app.use('/api/tenants', tenantRoutes);
+app.use('/api/superadmin', superadminRoutes);
 app.use('/api', notificationRoutes);
 app.use('/api/webhooks', webhookRoutes);
 
