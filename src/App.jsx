@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Helmet } from 'react-helmet';
 import { Toaster } from '@/components/ui/toaster';
 import { SupabaseAuthProvider, useSupabaseAuth } from '@/contexts/SupabaseAuthContext';
+import { UiLanguageProvider } from '@/contexts/UiLanguageContext';
 import PublicRegistrationPage from '@/pages/PublicRegistrationPage';
 import DashboardPage from '@/pages/DashboardPage';
 import LoginPage from '@/pages/LoginPage';
@@ -61,7 +62,9 @@ function AppContent() {
 function App() {
   return (
     <SupabaseAuthProvider>
-      <AppContent />
+      <UiLanguageProvider>
+        <AppContent />
+      </UiLanguageProvider>
     </SupabaseAuthProvider>
   );
 }

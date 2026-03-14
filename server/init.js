@@ -7,7 +7,69 @@ import bcrypt from 'bcryptjs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const DEFAULT_TENANT = {
+  slug: 'recompute-it',
+  name: 're:Compute-IT',
+  support_email: 'kontakt@recompute.it',
+  support_phone: '016-5416700',
+  brand_config: {
+    logoUrl: 'https://horizons-cdn.hostinger.com/66ce8f1a-1805-4a09-9f17-041a9f68d79f/f39487d84caba3a65608a9652e97d727.jpg',
+    themePreset: 'forest',
+    theme: {
+      primary: '#166534',
+      primaryHover: '#14532d',
+      primarySoft: '#dcfce7',
+      accent: '#0f766e',
+      panel: '#1f2937',
+    },
+  },
+};
+
 export async function initDb() {
+  // 1. Ensure tenants table exists FIRST
+  await query(`
+    CREATE TABLE IF NOT EXISTS tenants (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      slug TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      brand_config JSONB NOT NULL DEFAULT '{}'::jsonb,
+      smtp_config JSONB NOT NULL DEFAULT '{}'::jsonb,
+      sms_config JSONB NOT NULL DEFAULT '{}'::jsonb,
+      support_email TEXT,
+      support_phone TEXT,
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  // 2. Seed default tenant
+  const { rows: existingTenants } = await query(
+    'SELECT id FROM tenants WHERE slug = $1',
+    [DEFAULT_TENANT.slug]
+  );
+
+  let defaultTenantId;
+  if (existingTenants.length === 0) {
+    const { rows } = await query(
+      `INSERT INTO tenants (slug, name, support_email, support_phone, brand_config)
+       VALUES ($1, $2, $3, $4, $5::jsonb)
+       RETURNING id`,
+      [
+        DEFAULT_TENANT.slug,
+        DEFAULT_TENANT.name,
+        DEFAULT_TENANT.support_email,
+        DEFAULT_TENANT.support_phone,
+        JSON.stringify(DEFAULT_TENANT.brand_config),
+      ]
+    );
+    defaultTenantId = rows[0].id;
+    console.log(`Default tenant "${DEFAULT_TENANT.name}" created (${defaultTenantId}).`);
+  } else {
+    defaultTenantId = existingTenants[0].id;
+  }
+
+  // 3. Run schema.sql
   const schemaPath = path.join(__dirname, 'schema.sql');
   const schemaSql = fs.readFileSync(schemaPath, 'utf8');
   const sanitizedSchemaSql = schemaSql
@@ -16,11 +78,62 @@ export async function initDb() {
     .join('\n');
   await query(sanitizedSchemaSql);
 
+  // 4. Tenant column migrations
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS tenant_id UUID REFERENCES tenants(id)`);
+  await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS tenant_id UUID REFERENCES tenants(id)`);
+  await query(`ALTER TABLE message_logs ADD COLUMN IF NOT EXISTS tenant_id UUID REFERENCES tenants(id)`);
+  await query(`ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS tenant_id UUID REFERENCES tenants(id)`);
+
+  // Assign orphan rows to default tenant
+  await query(`UPDATE users SET tenant_id = $1 WHERE tenant_id IS NULL`, [defaultTenantId]);
+  await query(`UPDATE service_tickets SET tenant_id = $1 WHERE tenant_id IS NULL`, [defaultTenantId]);
+  await query(`UPDATE message_logs SET tenant_id = $1 WHERE tenant_id IS NULL`, [defaultTenantId]);
+  await query(`UPDATE app_settings SET tenant_id = $1 WHERE tenant_id IS NULL`, [defaultTenantId]);
+
+  // Set NOT NULL after backfill
+  await query(`
+    DO $$ BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'users' AND column_name = 'tenant_id' AND is_nullable = 'YES'
+      ) THEN
+        ALTER TABLE users ALTER COLUMN tenant_id SET NOT NULL;
+      END IF;
+    END $$;
+  `);
+  await query(`
+    DO $$ BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'service_tickets' AND column_name = 'tenant_id' AND is_nullable = 'YES'
+      ) THEN
+        ALTER TABLE service_tickets ALTER COLUMN tenant_id SET NOT NULL;
+      END IF;
+    END $$;
+  `);
+
+  // Unique constraint on (tenant_id, email) for users
+  await query(`
+    DO $$ BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'users_tenant_email_unique'
+      ) THEN
+        ALTER TABLE users DROP CONSTRAINT IF EXISTS users_email_key;
+        ALTER TABLE users ADD CONSTRAINT users_tenant_email_unique UNIQUE (tenant_id, email);
+      END IF;
+    END $$;
+  `);
+
+  // Tenant indexes
+  await query(`CREATE INDEX IF NOT EXISTS users_tenant_id_idx ON users (tenant_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS service_tickets_tenant_id_idx ON service_tickets (tenant_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS message_logs_tenant_id_idx ON message_logs (tenant_id)`);
+
+  // 5. Other column migrations
   await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ`);
   await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS customer_notified_at TIMESTAMPTZ`);
   await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS picked_up_at TIMESTAMPTZ`);
   await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ`);
-  await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS customer_phone_normalized TEXT`);
   await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS customer_phone_normalized TEXT`);
   await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS last_customer_response_text TEXT`);
   await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS last_customer_response_at TIMESTAMPTZ`);
@@ -34,6 +147,7 @@ export async function initDb() {
   await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS diagnosis_fee TEXT`);
   await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS planned_actions TEXT`);
   await query(`ALTER TABLE service_tickets ALTER COLUMN customer_phone DROP NOT NULL`);
+
   await query(
     `UPDATE service_tickets
      SET preferred_contact_channel = CASE
@@ -45,36 +159,18 @@ export async function initDb() {
      END
      WHERE preferred_contact_channel IS NULL OR preferred_contact_channel = ''`
   );
-  await query(
-    `DO $$
-     BEGIN
-       IF EXISTS (
-         SELECT 1
-         FROM information_schema.columns
-         WHERE table_name = 'service_tickets'
-           AND column_name = 'customer_phone_normalized'
-       ) THEN
-         EXECUTE 'CREATE INDEX IF NOT EXISTS service_tickets_phone_norm_idx ON service_tickets (customer_phone_normalized)';
-       END IF;
-     END
-     $$;`
-  );
-  await query(
-    `CREATE TABLE IF NOT EXISTS message_logs (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      ticket_id UUID REFERENCES service_tickets(id) ON DELETE SET NULL,
-      channel TEXT NOT NULL,
-      direction TEXT NOT NULL,
-      sender_user TEXT,
-      to_number TEXT,
-      from_number TEXT,
-      subject TEXT,
-      body TEXT,
-      provider TEXT,
-      provider_id TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )`
-  );
+
+  await query(`
+    DO $$ BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'service_tickets' AND column_name = 'customer_phone_normalized'
+      ) THEN
+        EXECUTE 'CREATE INDEX IF NOT EXISTS service_tickets_phone_norm_idx ON service_tickets (customer_phone_normalized)';
+      END IF;
+    END $$;
+  `);
+
   await query(`ALTER TABLE message_logs ADD COLUMN IF NOT EXISTS sender_user TEXT`);
   await query(`ALTER TABLE message_logs ADD COLUMN IF NOT EXISTS raw_body TEXT`);
   await query(`ALTER TABLE message_logs ADD COLUMN IF NOT EXISTS parse_method TEXT`);
@@ -83,37 +179,25 @@ export async function initDb() {
   await query(`ALTER TABLE message_logs ADD COLUMN IF NOT EXISTS in_reply_to TEXT`);
   await query(`ALTER TABLE message_logs ADD COLUMN IF NOT EXISTS references_header TEXT`);
   await query(`ALTER TABLE message_logs ADD COLUMN IF NOT EXISTS reply_token TEXT`);
-  // Performance indexes for message_logs
+
   await query(`CREATE INDEX IF NOT EXISTS message_logs_ticket_id_idx ON message_logs (ticket_id)`);
   await query(`CREATE INDEX IF NOT EXISTS message_logs_channel_direction_idx ON message_logs (channel, direction)`);
   await query(`CREATE INDEX IF NOT EXISTS message_logs_provider_id_idx ON message_logs (provider, provider_id) WHERE provider_id IS NOT NULL`);
   await query(`CREATE INDEX IF NOT EXISTS message_logs_created_at_idx ON message_logs (created_at)`);
-  await query(
-    `CREATE TABLE IF NOT EXISTS app_settings (
-      key TEXT PRIMARY KEY,
-      value_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )`
-  );
-  await query(
-    `CREATE TABLE IF NOT EXISTS translation_cache (
-      source_text TEXT NOT NULL,
-      target_language TEXT NOT NULL,
-      translated_text TEXT NOT NULL,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (source_text, target_language)
-    )`
-  );
 
+  // 6. Bootstrap admin user
   const adminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL;
   const adminPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD;
   if (adminEmail && adminPassword) {
-    const { rows } = await query('SELECT id FROM users WHERE email = $1', [adminEmail]);
+    const { rows } = await query(
+      'SELECT id FROM users WHERE email = $1 AND tenant_id = $2',
+      [adminEmail, defaultTenantId]
+    );
     if (rows.length === 0) {
       const hash = await bcrypt.hash(adminPassword, 10);
       await query(
-        'INSERT INTO users (email, password_hash, role, name) VALUES ($1, $2, $3, $4)',
-        [adminEmail, hash, 'admin', 'Admin']
+        'INSERT INTO users (tenant_id, email, password_hash, role, name) VALUES ($1, $2, $3, $4, $5)',
+        [defaultTenantId, adminEmail, hash, 'admin', 'Admin']
       );
       console.log('Bootstrap admin user created.');
     }

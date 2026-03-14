@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useToast } from '@/components/ui/use-toast';
 import { useSupabaseAuth } from '@/contexts/SupabaseAuthContext';
+import { useUiLanguage } from '@/contexts/UiLanguageContext';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,7 @@ const APP_VERSION = getDisplayVersion();
 
 export default function LoginPage() {
   const { signInWithEmail, session } = useSupabaseAuth();
+  const { t } = useUiLanguage();
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -35,8 +37,8 @@ export default function LoginPage() {
     const { error } = await signInWithEmail(email, password);
     if (error) {
       toast({
-        title: "Inloggningsfel",
-        description: "Kontrollera din e-post och lösenord och försök igen.",
+        title: t.login.loginErrorTitle,
+        description: t.login.loginErrorDescription,
         variant: "destructive",
       });
     }
@@ -61,14 +63,14 @@ export default function LoginPage() {
       >
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-800">
-            Personalinloggning
+            {t.login.title}
           </h1>
-          <p className="mt-2 text-gray-500">Ange dina uppgifter för att fortsätta</p>
+          <p className="mt-2 text-gray-500">{t.login.subtitle}</p>
         </div>
-        
+
         <form onSubmit={handleLogin} className="space-y-6">
           <div className="space-y-2">
-            <Label htmlFor="email" className="text-gray-700">E-postadress</Label>
+            <Label htmlFor="email" className="text-gray-700">{t.login.emailLabel}</Label>
             <Input
               id="email"
               type="email"
@@ -76,11 +78,11 @@ export default function LoginPage() {
               onChange={(e) => setEmail(e.target.value)}
               required
               className="bg-gray-50 border-gray-300 text-gray-900"
-              placeholder="namn@foretag.se"
+              placeholder={t.login.emailPlaceholder}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="password">Lösenord</Label>
+            <Label htmlFor="password">{t.login.passwordLabel}</Label>
             <Input
               id="password"
               type="password"
@@ -93,7 +95,7 @@ export default function LoginPage() {
           </div>
           <Button type="submit" className="w-full bg-slate-700 hover:bg-slate-800 text-white" disabled={loading}>
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Logga in
+            {t.login.loginButton}
           </Button>
         </form>
       </motion.div>
