@@ -124,6 +124,30 @@ export async function initDb() {
     END $$;
   `);
 
+  // Migrate app_settings PK from (key) to (tenant_id, key)
+  await query(`
+    DO $$ BEGIN
+      -- Check if old single-column PK exists (no tenant_id in PK)
+      IF EXISTS (
+        SELECT 1 FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
+        WHERE tc.table_name = 'app_settings'
+          AND tc.constraint_type = 'PRIMARY KEY'
+          AND kcu.column_name = 'key'
+          AND NOT EXISTS (
+            SELECT 1 FROM information_schema.key_column_usage kcu2
+            WHERE kcu2.constraint_name = tc.constraint_name
+              AND kcu2.column_name = 'tenant_id'
+          )
+      ) THEN
+        -- Drop old PK and create composite PK
+        ALTER TABLE app_settings DROP CONSTRAINT app_settings_pkey;
+        ALTER TABLE app_settings ALTER COLUMN tenant_id SET NOT NULL;
+        ALTER TABLE app_settings ADD PRIMARY KEY (tenant_id, key);
+      END IF;
+    END $$;
+  `);
+
   // Tenant indexes
   await query(`CREATE INDEX IF NOT EXISTS users_tenant_id_idx ON users (tenant_id)`);
   await query(`CREATE INDEX IF NOT EXISTS service_tickets_tenant_id_idx ON service_tickets (tenant_id)`);
