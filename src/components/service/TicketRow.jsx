@@ -115,6 +115,10 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
   const [workDoneSummary, setWorkDoneSummary] = useState('');
   const [finalCost, setFinalCost] = useState('');
   const [currentDiagnosis, setCurrentDiagnosis] = useState(null);
+
+  // Track which fields the user is actively editing ("dirty") so that
+  // polling refreshes don't overwrite unsaved input.
+  const dirtyFieldsRef = React.useRef(new Set());
   const [isProcessing, setIsProcessing] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -156,11 +160,12 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
   );
 
   useEffect(() => {
-    setPlannedActions(ticket.planned_actions || '');
-    setCostProposal(ticket.cost_proposal || '');
-    setWorkDoneSummary(ticket.work_done_summary || '');
-    setFinalCost(ticket.final_cost || '');
-    setInternalNotes(ticket.internal_notes || '');
+    const dirty = dirtyFieldsRef.current;
+    if (!dirty.has('planned_actions'))  setPlannedActions(ticket.planned_actions || '');
+    if (!dirty.has('cost_proposal'))    setCostProposal(ticket.cost_proposal || '');
+    if (!dirty.has('work_done_summary')) setWorkDoneSummary(ticket.work_done_summary || '');
+    if (!dirty.has('final_cost'))       setFinalCost(ticket.final_cost || '');
+    if (!dirty.has('internal_notes'))   setInternalNotes(ticket.internal_notes || '');
     setCurrentDiagnosis(ticket.diagnosis || null);
     setComposeSubject(`Re: Ärende #${ticket.ticket_number}`);
   }, [ticket]);
@@ -271,14 +276,18 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
     }
   };
 
+  const markDirty = (field) => dirtyFieldsRef.current.add(field);
+  const clearDirty = (field) => dirtyFieldsRef.current.delete(field);
+
   const handleFieldUpdate = (field, value) => {
+    clearDirty(field);
     if (ticket[field] !== value) {
       onUpdate(ticket.id, { [field]: value });
       let title = '';
       if(field === 'internal_notes') title = 'Anteckningar sparade';
       if(field === 'work_done_summary') title = 'Åtgärder sparade';
       if(field === 'final_cost') title = 'Kostnad sparad';
-      
+
       if (title) {
         toast({ title: title, description: `Ärende #${ticket.ticket_number} har uppdaterats.` });
       }
@@ -368,6 +377,8 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
     }
 
     if (templateType === 'kostnadsforslag') {
+      clearDirty('planned_actions');
+      clearDirty('cost_proposal');
       await onUpdate(ticket.id, {
         planned_actions: plannedActions || '',
         cost_proposal: costProposal || '',
@@ -647,7 +658,7 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
                     <Textarea
                       id={`planned-actions-${ticket.id}`}
                       value={plannedActions}
-                      onChange={(e) => setPlannedActions(e.target.value)}
+                      onChange={(e) => { markDirty('planned_actions'); setPlannedActions(e.target.value); }}
                       onBlur={() => handleFieldUpdate('planned_actions', plannedActions)}
                       placeholder="Beskriv planerade åtgärder..."
                       className="bg-white min-h-[100px]"
@@ -662,7 +673,7 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
                     <Input
                       id={`cost-proposal-${ticket.id}`}
                       value={costProposal}
-                      onChange={(e) => setCostProposal(e.target.value)}
+                      onChange={(e) => { markDirty('cost_proposal'); setCostProposal(e.target.value); }}
                       onBlur={() => handleFieldUpdate('cost_proposal', costProposal)}
                       placeholder="t.ex. 1299"
                       className="bg-white"
@@ -708,7 +719,7 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
                         <Textarea
                           id={`work-done-${ticket.id}`}
                           value={workDoneSummary}
-                          onChange={(e) => setWorkDoneSummary(e.target.value)}
+                          onChange={(e) => { markDirty('work_done_summary'); setWorkDoneSummary(e.target.value); }}
                           onBlur={() => handleFieldUpdate('work_done_summary', workDoneSummary)}
                           placeholder="Beskriv vad som har gjorts..."
                           className="bg-white min-h-[100px]"
@@ -723,7 +734,7 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
                        <Input
                           id={`final-cost-${ticket.id}`}
                           value={finalCost}
-                          onChange={(e) => setFinalCost(e.target.value)}
+                          onChange={(e) => { markDirty('final_cost'); setFinalCost(e.target.value); }}
                           onBlur={() => handleFieldUpdate('final_cost', finalCost)}
                           placeholder="t.ex. 1299"
                           className="bg-white"
@@ -751,7 +762,7 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
                     <Textarea
                       id={`internal-notes-${ticket.id}`}
                       value={internalNotes}
-                      onChange={(e) => setInternalNotes(e.target.value)}
+                      onChange={(e) => { markDirty('internal_notes'); setInternalNotes(e.target.value); }}
                       onBlur={() => handleFieldUpdate('internal_notes', internalNotes)}
                       placeholder="Anteckningar endast för personal..."
                       className="bg-white min-h-[100px]"
