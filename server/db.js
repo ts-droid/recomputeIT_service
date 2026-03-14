@@ -27,9 +27,15 @@ if (connectionString) {
   console.warn('DATABASE_URL is not set.');
 }
 
+const sslMode = (process.env.DATABASE_SSL || '').toLowerCase();
+const sslConfig =
+  sslMode === 'true' || sslMode === 'require'
+    ? { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== 'false' }
+    : undefined;
+
 const pool = new Pool({
   connectionString,
-  ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
+  ssl: sslConfig,
 });
 
 export const query = (text, params) => pool.query(text, params);

@@ -15,8 +15,46 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 8080;
 const DIST_DIR = path.resolve(__dirname, '..', 'dist');
-const BRAND_NAME = 're:Compute-IT';
-const TRANSLATION_PROTECTED_TERMS = Object.freeze([BRAND_NAME]);
+const BRAND_NAME = process.env.BRAND_NAME || 're:Compute-IT';
+const TRANSLATION_PROTECTED_TERMS = Object.freeze([BRAND_NAME].filter(Boolean));
+
+// ---------------------------------------------------------------------------
+// Security headers
+// ---------------------------------------------------------------------------
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+});
+
+// ---------------------------------------------------------------------------
+// Rate limiting (in-memory, simple)
+// ---------------------------------------------------------------------------
+const loginAttempts = new Map();
+const LOGIN_RATE_WINDOW_MS = 15 * 60 * 1000; // 15 min
+const LOGIN_RATE_MAX = 10;
+
+const cleanupLoginAttempts = () => {
+  const now = Date.now();
+  for (const [key, entry] of loginAttempts) {
+    if (now - entry.windowStart > LOGIN_RATE_WINDOW_MS) loginAttempts.delete(key);
+  }
+};
+setInterval(cleanupLoginAttempts, 60_000);
+
+const checkLoginRateLimit = (ip) => {
+  const now = Date.now();
+  const entry = loginAttempts.get(ip);
+  if (!entry || now - entry.windowStart > LOGIN_RATE_WINDOW_MS) {
+    loginAttempts.set(ip, { count: 1, windowStart: now });
+    return true;
+  }
+  entry.count += 1;
+  return entry.count <= LOGIN_RATE_MAX;
+};
 
 app.use(
   express.json({
@@ -211,20 +249,21 @@ const OUTBOUND_BLOCK_DELIMITER = '----------<>----------';
 const EMAIL_REPLY_MARKERS = [...Object.values(REPLY_MARKER_BY_LANGUAGE), ...Object.values(REPLY_HINT_BY_LANGUAGE)].map((line) =>
   line.toLowerCase()
 );
-const REPLY_TOKEN_REGEX = /RECOMPUTE[_-]?REPLY[_-]?START[:\s_-]*([a-z0-9-]{6,64})/i;
-const OUTBOUND_BLOCK_START_REGEX = /RECOMPUTE[_-]?OUTBOUND[_-]?START[:\s_-]*([a-z0-9-]{6,64})/i;
-const OUTBOUND_BLOCK_END_REGEX = /RECOMPUTE[_-]?OUTBOUND[_-]?END[:\s_-]*([a-z0-9-]{6,64})/i;
+// Match both legacy RECOMPUTE_* and new SVC_* markers for backward compat
+const REPLY_TOKEN_REGEX = /(?:RECOMPUTE|SVC)[_-]?REPLY[_-]?START[:\s_-]*([a-z0-9-]{6,64})/i;
+const OUTBOUND_BLOCK_START_REGEX = /(?:RECOMPUTE|SVC)[_-]?OUTBOUND[_-]?START[:\s_-]*([a-z0-9-]{6,64})/i;
+const OUTBOUND_BLOCK_END_REGEX = /(?:RECOMPUTE|SVC)[_-]?OUTBOUND[_-]?END[:\s_-]*([a-z0-9-]{6,64})/i;
 const QUOTE_HEADER_REGEX = /(^|\n)\s*(on .+wrote:|den .+skrev:|från:|from:|skickat:|sent:|till:|to:|am .+schrieb|el .+escribi[oó]|le .+a écrit)/i;
 
 const getReplyMarkerLine = (language = 'sv') => REPLY_MARKER_BY_LANGUAGE[language] || REPLY_MARKER_BY_LANGUAGE.sv;
 const getReplyHintLine = (language = 'sv') => REPLY_HINT_BY_LANGUAGE[language] || REPLY_HINT_BY_LANGUAGE.sv;
 const getReplyDirectLine = (language = 'sv') => REPLY_DIRECT_BY_LANGUAGE[language] || REPLY_DIRECT_BY_LANGUAGE.sv;
 const getReplyTokenLine = (replyToken = '') =>
-  replyToken ? `--- RECOMPUTE_REPLY_START:${replyToken} ---` : '--- RECOMPUTE_REPLY_START ---';
+  replyToken ? `--- SVC_REPLY_START:${replyToken} ---` : '--- SVC_REPLY_START ---';
 const getOutboundStartLine = (replyToken = '') =>
-  `${OUTBOUND_BLOCK_DELIMITER} RECOMPUTE_OUTBOUND_START${replyToken ? `:${replyToken}` : ''} ${OUTBOUND_BLOCK_DELIMITER}`;
+  `${OUTBOUND_BLOCK_DELIMITER} SVC_OUTBOUND_START${replyToken ? `:${replyToken}` : ''} ${OUTBOUND_BLOCK_DELIMITER}`;
 const getOutboundEndLine = (replyToken = '') =>
-  `${OUTBOUND_BLOCK_DELIMITER} RECOMPUTE_OUTBOUND_END${replyToken ? `:${replyToken}` : ''} ${OUTBOUND_BLOCK_DELIMITER}`;
+  `${OUTBOUND_BLOCK_DELIMITER} SVC_OUTBOUND_END${replyToken ? `:${replyToken}` : ''} ${OUTBOUND_BLOCK_DELIMITER}`;
 const generateReplyToken = () => crypto.randomBytes(6).toString('hex');
 
 const appendReplyGuidance = (body = '', language = 'sv', replyToken = '') => {
@@ -468,8 +507,8 @@ const cleanVisibleReplyText = (raw = '') => {
     if (OUTBOUND_BLOCK_START_REGEX.test(trimmed)) break;
     if (OUTBOUND_BLOCK_END_REGEX.test(trimmed)) break;
     if (EMAIL_REPLY_MARKERS.includes(lower)) break;
-    if (/^---\s*recompute[_-]?reply[_-]?start/i.test(trimmed)) break;
-    if (/^[-<> ]*recompute[_-]?outbound[_-]?(start|end)/i.test(trimmed)) break;
+    if (/^---\s*(?:recompute|svc)[_-]?reply[_-]?start/i.test(trimmed)) break;
+    if (/^[-<> ]*(?:recompute|svc)[_-]?outbound[_-]?(start|end)/i.test(trimmed)) break;
     if (/^[-_]{2,}\s*(svara ovanf[oö]r denna linje|reply above this line)\s*[-_]{2,}$/i.test(trimmed)) break;
     if (QUOTE_HEADER_REGEX.test(`\n${trimmed}`)) break;
     if (/^(från:|from:|skickat:|sent:|till:|to:|ämne:|subject:)/i.test(trimmed)) break;
@@ -1607,8 +1646,11 @@ const sendEmail = async ({ to, subject, body, html }) => {
   throw new Error('Email is not configured');
 };
 
-app.get('/api/tickets', requireAuth, async (_req, res) => {
+app.get('/api/tickets', requireAuth, async (req, res) => {
   try {
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 200, 1), 1000);
+    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+
     const { rows } = await query(
       `
         SELECT
@@ -1626,7 +1668,9 @@ app.get('/api/tickets', requireAuth, async (_req, res) => {
             AND direction = 'inbound'
         ) inbound ON TRUE
         ORDER BY t.created_at DESC
-      `
+        LIMIT $1 OFFSET $2
+      `,
+      [limit, offset]
     );
     res.json(rows);
   } catch (error) {
@@ -2065,6 +2109,11 @@ app.post('/api/tickets/:id/actions/translate', requireAuth, requireRole('service
 
 app.post('/api/auth/login', async (req, res) => {
   try {
+    const clientIp = req.ip || req.socket?.remoteAddress || 'unknown';
+    if (!checkLoginRateLimit(clientIp)) {
+      return res.status(429).json({ error: 'För många inloggningsförsök. Försök igen om 15 minuter.' });
+    }
+
     const { email, password } = req.body || {};
     if (!email || !password) {
       return res.status(400).json({ error: 'E-post och lösenord krävs.' });
@@ -2720,35 +2769,30 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
       }
     } else if (EMAIL_WEBHOOK_SECRET) {
       const providedSecret =
-        req.query.secret ||
         req.headers['x-webhook-secret'] ||
         req.headers['x-inbound-secret'] ||
+        req.query.secret ||
         '';
-      if (providedSecret !== EMAIL_WEBHOOK_SECRET) {
+      if (!providedSecret || !timingSafeEqual(providedSecret, EMAIL_WEBHOOK_SECRET)) {
         return res.status(401).json({ error: 'Invalid webhook secret' });
       }
     }
 
     const inbound = parseInboundEmailPayload(parsedPayload);
     if (inbound.provider === 'resend' && !inbound.text && inbound.emailId) {
-      for (let attempt = 1; attempt <= 6 && !inbound.text; attempt += 1) {
+      // Try up to 3 times with short delays (max ~1.8s total, not 12.6s)
+      for (let attempt = 1; attempt <= 3 && !inbound.text; attempt += 1) {
         try {
           const received = await loadResendReceivedEmail(inbound.emailId);
           inbound.text = extractInboundText(received) || inbound.text;
-          if (!inbound.text && attempt < 6) {
-            await new Promise((resolve) => setTimeout(resolve, 600 * attempt));
-          }
-          if (!inbound.text && attempt === 6) {
-            console.warn('Resend inbound email has no extractable text body', {
-              emailId: inbound.emailId,
-              receivedKeys: received ? Object.keys(received) : [],
-            });
+          if (!inbound.text && attempt < 3) {
+            await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
           }
         } catch (error) {
-          if (attempt === 6) {
+          if (attempt === 3) {
             console.error('Resend receiving fetch failed:', error);
           } else {
-            await new Promise((resolve) => setTimeout(resolve, 600 * attempt));
+            await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
           }
         }
       }
@@ -2763,6 +2807,17 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
 
     if (!inbound.from || (!inbound.subject && !inbound.text)) {
       return res.status(400).json({ error: 'Invalid inbound email payload' });
+    }
+
+    // Dedup check — skip if we already processed this message
+    if (inbound.messageId) {
+      const existing = await query(
+        `SELECT id FROM message_logs WHERE channel = 'email' AND direction = 'inbound' AND message_id = $1 LIMIT 1`,
+        [inbound.messageId]
+      );
+      if (existing.rowCount > 0) {
+        return res.json({ ok: true, duplicate: true });
+      }
     }
 
     const ticketNumber = extractTicketNumber(inbound.subject, inbound.text);
@@ -2928,7 +2983,8 @@ app.post('/api/webhooks/email-inbound', async (req, res) => {
 app.post('/api/webhooks/46elks', async (req, res) => {
   let client;
   try {
-    if (ELKS_WEBHOOK_SECRET && req.query.secret !== ELKS_WEBHOOK_SECRET) {
+    const elksSecret = req.headers['x-webhook-secret'] || req.query.secret || '';
+    if (ELKS_WEBHOOK_SECRET && (!elksSecret || !timingSafeEqual(elksSecret, ELKS_WEBHOOK_SECRET))) {
       return res.status(401).json({ error: 'Invalid webhook secret' });
     }
 

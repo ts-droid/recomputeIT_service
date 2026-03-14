@@ -68,6 +68,14 @@ const printTranslations = {
   // Add other languages as needed
 };
 
+const escapeHtml = (value) =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
 export const printDocuments = (ticket, language = 'sv') => {
   const t = printTranslations[language] || printTranslations.sv;
   const printWindow = window.open('', '_blank');
@@ -123,18 +131,18 @@ export const printDocuments = (ticket, language = 'sv') => {
           </div>
           <div class="section">
             <h3>${t.customerInfo}</h3>
-            <div class="field"><span class="label">${t.name}:</span><span class="value">${ticket.customer_name}</span></div>
-            <div class="field"><span class="label">${t.phone}:</span><span class="value">${ticket.customer_phone}</span></div>
-            ${ticket.customer_email ? `<div class="field"><span class="label">${t.email}:</span><span class="value">${ticket.customer_email}</span></div>` : ''}
+            <div class="field"><span class="label">${t.name}:</span><span class="value">${escapeHtml(ticket.customer_name)}</span></div>
+            <div class="field"><span class="label">${t.phone}:</span><span class="value">${escapeHtml(ticket.customer_phone)}</span></div>
+            ${ticket.customer_email ? `<div class="field"><span class="label">${t.email}:</span><span class="value">${escapeHtml(ticket.customer_email)}</span></div>` : ''}
           </div>
           <div class="section">
             <h3>${t.deviceInfo}</h3>
-            <div class="field"><span class="label">${t.deviceType}:</span><span class="value">${ticket.device_type}</span></div>
-            ${ticket.device_model ? `<div class="field"><span class="label">${t.model}:</span><span class="value">${ticket.device_model}</span></div>` : ''}
+            <div class="field"><span class="label">${t.deviceType}:</span><span class="value">${escapeHtml(ticket.device_type)}</span></div>
+            ${ticket.device_model ? `<div class="field"><span class="label">${t.model}:</span><span class="value">${escapeHtml(ticket.device_model)}</span></div>` : ''}
           </div>
           <div class="section">
             <h3>${t.problemDescription}</h3>
-            <div class="problem-box">${ticket.issue_description}</div>
+            <div class="problem-box">${escapeHtml(ticket.issue_description)}</div>
           </div>
         </div>
         <div class="footer">
@@ -153,19 +161,19 @@ export const printDocuments = (ticket, language = 'sv') => {
             </div>
             <div class="section">
               <h3>${t.customerInfo}</h3>
-              <div class="field"><span class="label">${t.name}:</span><span class="value">${ticket.customer_name}</span></div>
-              <div class="field"><span class="label">${t.phone}:</span><span class="value">${ticket.customer_phone}</span></div>
-              ${ticket.customer_email ? `<div class="field"><span class="label">${t.email}:</span><span class="value">${ticket.customer_email}</span></div>` : ''}
+              <div class="field"><span class="label">${t.name}:</span><span class="value">${escapeHtml(ticket.customer_name)}</span></div>
+              <div class="field"><span class="label">${t.phone}:</span><span class="value">${escapeHtml(ticket.customer_phone)}</span></div>
+              ${ticket.customer_email ? `<div class="field"><span class="label">${t.email}:</span><span class="value">${escapeHtml(ticket.customer_email)}</span></div>` : ''}
             </div>
             <div class="section">
               <h3>${t.deviceInfo}</h3>
-              <div class="field"><span class="label">${t.deviceType}:</span><span class="value">${ticket.device_type}</span></div>
-              ${ticket.device_model ? `<div class="field"><span class="label">${t.model}:</span><span class="value">${ticket.device_model}</span></div>` : ''}
+              <div class="field"><span class="label">${t.deviceType}:</span><span class="value">${escapeHtml(ticket.device_type)}</span></div>
+              ${ticket.device_model ? `<div class="field"><span class="label">${t.model}:</span><span class="value">${escapeHtml(ticket.device_model)}</span></div>` : ''}
             </div>
             <div class="section">
               <h3>${t.customerProblemDescription}</h3>
-              <div class="problem-box">${ticket.issue_description}</div>
-              ${ticket.additional_notes ? `<h4>${t.additionalInfo}:</h4><div class="problem-box">${ticket.additional_notes}</div>` : ''}
+              <div class="problem-box">${escapeHtml(ticket.issue_description)}</div>
+              ${ticket.additional_notes ? `<h4>${t.additionalInfo}:</h4><div class="problem-box">${escapeHtml(ticket.additional_notes)}</div>` : ''}
             </div>
             <div class="workshop-notes">
               <h4>${t.technicianNotes}:</h4>
@@ -238,14 +246,14 @@ export const printFinalReceipt = (ticket, enhancedSummary, language = 'sv') => {
             </div>
             
             <div class="ticket-info">
-            <div><span class="label">${t.caseNumber}:</span> <span class="value">#${ticket.ticket_number}</span></div>
-            <div><span class="label">${t.date}:</span> <span class="value">${currentDate}</span></div>
-            <div><span class="label">${t.customer}:</span> <span class="value">${ticket.customer_name}</span></div>
+            <div><span class="label">${t.caseNumber}:</span> <span class="value">#${escapeHtml(ticket.ticket_number)}</span></div>
+            <div><span class="label">${t.date}:</span> <span class="value">${escapeHtml(currentDate)}</span></div>
+            <div><span class="label">${t.customer}:</span> <span class="value">${escapeHtml(ticket.customer_name)}</span></div>
             </div>
 
             <div class="section">
             <h2>${t.actionsTaken}</h2>
-            <div class="summary-box">${enhancedSummary}</div>
+            <div class="summary-box">${escapeHtml(enhancedSummary)}</div>
             </div>
 
             <div class="cost-section">

@@ -30,6 +30,9 @@ export async function initDb() {
   await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS last_staff_contact_by TEXT`);
   await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS last_staff_contact_channel TEXT`);
   await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS preferred_contact_channel TEXT`);
+  await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS has_new_customer_message BOOLEAN NOT NULL DEFAULT FALSE`);
+  await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS diagnosis_fee TEXT`);
+  await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS planned_actions TEXT`);
   await query(`ALTER TABLE service_tickets ALTER COLUMN customer_phone DROP NOT NULL`);
   await query(
     `UPDATE service_tickets
@@ -80,6 +83,11 @@ export async function initDb() {
   await query(`ALTER TABLE message_logs ADD COLUMN IF NOT EXISTS in_reply_to TEXT`);
   await query(`ALTER TABLE message_logs ADD COLUMN IF NOT EXISTS references_header TEXT`);
   await query(`ALTER TABLE message_logs ADD COLUMN IF NOT EXISTS reply_token TEXT`);
+  // Performance indexes for message_logs
+  await query(`CREATE INDEX IF NOT EXISTS message_logs_ticket_id_idx ON message_logs (ticket_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS message_logs_channel_direction_idx ON message_logs (channel, direction)`);
+  await query(`CREATE INDEX IF NOT EXISTS message_logs_provider_id_idx ON message_logs (provider, provider_id) WHERE provider_id IS NOT NULL`);
+  await query(`CREATE INDEX IF NOT EXISTS message_logs_created_at_idx ON message_logs (created_at)`);
   await query(
     `CREATE TABLE IF NOT EXISTS app_settings (
       key TEXT PRIMARY KEY,

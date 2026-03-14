@@ -95,7 +95,7 @@ const cleanChatBody = (body = '') => {
     if (/^on .+wrote:$/i.test(trimmed)) break;
     if (/^den .+skrev:$/i.test(trimmed)) break;
     if (/^(from:|från:|sent:|skickat:|to:|till:|subject:|ämne:)/i.test(trimmed)) break;
-    if (lower.includes('recompute_reply_start')) break;
+    if (lower.includes('recompute_reply_start') || lower.includes('svc_reply_start')) break;
     if (lower.includes('svara ovanför denna linje')) break;
     if (lower.includes('reply above this line')) break;
 

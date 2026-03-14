@@ -32,6 +32,9 @@ CREATE TABLE IF NOT EXISTS service_tickets (
   work_done_summary TEXT,
   final_cost TEXT,
   diagnosis TEXT,
+  has_new_customer_message BOOLEAN NOT NULL DEFAULT FALSE,
+  diagnosis_fee TEXT,
+  planned_actions TEXT,
   is_hidden BOOLEAN NOT NULL DEFAULT FALSE,
   completed_at TIMESTAMPTZ,
   customer_notified_at TIMESTAMPTZ,
@@ -70,6 +73,11 @@ CREATE TABLE IF NOT EXISTS message_logs (
   provider_id TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE INDEX IF NOT EXISTS message_logs_ticket_id_idx ON message_logs (ticket_id);
+CREATE INDEX IF NOT EXISTS message_logs_channel_direction_idx ON message_logs (channel, direction);
+CREATE INDEX IF NOT EXISTS message_logs_provider_id_idx ON message_logs (provider, provider_id) WHERE provider_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS message_logs_created_at_idx ON message_logs (created_at);
 
 CREATE TABLE IF NOT EXISTS app_settings (
   key TEXT PRIMARY KEY,
