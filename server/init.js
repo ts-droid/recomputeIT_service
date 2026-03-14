@@ -69,7 +69,22 @@ export async function initDb() {
     defaultTenantId = existingTenants[0].id;
   }
 
-  // 3. Run schema.sql
+  // 3. Add tenant_id columns to EXISTING tables BEFORE schema.sql runs
+  //    (schema.sql creates indexes on tenant_id — columns must exist first)
+  //    On fresh installs the tables don't exist yet, so we guard with DO blocks.
+  for (const tbl of ['users', 'service_tickets', 'message_logs', 'app_settings']) {
+    await query(`
+      DO $$ BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = '${tbl}')
+           AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = '${tbl}' AND column_name = 'tenant_id')
+        THEN
+          ALTER TABLE ${tbl} ADD COLUMN tenant_id UUID REFERENCES tenants(id);
+        END IF;
+      END $$;
+    `);
+  }
+
+  // 4. Run schema.sql (creates tables IF NOT EXISTS + indexes)
   const schemaPath = path.join(__dirname, 'schema.sql');
   const schemaSql = fs.readFileSync(schemaPath, 'utf8');
   const sanitizedSchemaSql = schemaSql
@@ -78,7 +93,7 @@ export async function initDb() {
     .join('\n');
   await query(sanitizedSchemaSql);
 
-  // 4. Tenant column migrations
+  // 5. Ensure tenant_id columns exist (idempotent, covers both fresh + legacy DBs)
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS tenant_id UUID REFERENCES tenants(id)`);
   await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS tenant_id UUID REFERENCES tenants(id)`);
   await query(`ALTER TABLE message_logs ADD COLUMN IF NOT EXISTS tenant_id UUID REFERENCES tenants(id)`);
@@ -90,7 +105,7 @@ export async function initDb() {
   await query(`UPDATE message_logs SET tenant_id = $1 WHERE tenant_id IS NULL`, [defaultTenantId]);
   await query(`UPDATE app_settings SET tenant_id = $1 WHERE tenant_id IS NULL`, [defaultTenantId]);
 
-  // Set NOT NULL after backfill
+  // 6. Set NOT NULL after backfill
   await query(`
     DO $$ BEGIN
       IF EXISTS (
@@ -153,7 +168,7 @@ export async function initDb() {
   await query(`CREATE INDEX IF NOT EXISTS service_tickets_tenant_id_idx ON service_tickets (tenant_id)`);
   await query(`CREATE INDEX IF NOT EXISTS message_logs_tenant_id_idx ON message_logs (tenant_id)`);
 
-  // 5. Other column migrations
+  // 7. Other column migrations
   await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ`);
   await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS customer_notified_at TIMESTAMPTZ`);
   await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS picked_up_at TIMESTAMPTZ`);
@@ -209,7 +224,7 @@ export async function initDb() {
   await query(`CREATE INDEX IF NOT EXISTS message_logs_provider_id_idx ON message_logs (provider, provider_id) WHERE provider_id IS NOT NULL`);
   await query(`CREATE INDEX IF NOT EXISTS message_logs_created_at_idx ON message_logs (created_at)`);
 
-  // 6. Bootstrap admin user
+  // 8. Bootstrap admin user
   const adminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL;
   const adminPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD;
   if (adminEmail && adminPassword) {
@@ -227,7 +242,7 @@ export async function initDb() {
     }
   }
 
-  // 7. Bootstrap superadmin user
+  // 9. Bootstrap superadmin user
   const superadminEmail = process.env.BOOTSTRAP_SUPERADMIN_EMAIL;
   const superadminPassword = process.env.BOOTSTRAP_SUPERADMIN_PASSWORD;
   if (superadminEmail && superadminPassword) {
