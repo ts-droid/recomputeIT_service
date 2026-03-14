@@ -28,9 +28,11 @@ if (connectionString) {
 }
 
 const sslMode = (process.env.DATABASE_SSL || '').toLowerCase();
+// Default rejectUnauthorized to false for Railway/cloud proxy compatibility.
+// Set DATABASE_SSL_REJECT_UNAUTHORIZED=true to enforce strict cert validation.
 const sslConfig =
   sslMode === 'true' || sslMode === 'require'
-    ? { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== 'false' }
+    ? { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === 'true' }
     : undefined;
 
 const pool = new Pool({
