@@ -165,7 +165,9 @@ router.patch('/:id', requireAuth, requireRole('service'), requireTenant, async (
     const updates = req.body || {};
     const allowedFields = new Set([
       'status',
+      'cost_proposal',
       'cost_proposal_approved',
+      'planned_actions',
       'internal_notes',
       'work_done_summary',
       'final_cost',
