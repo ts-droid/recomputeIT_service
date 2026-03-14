@@ -52,8 +52,8 @@ export const useServiceTickets = () => {
   const { session, user, token, loading: authLoading } = useSupabaseAuth();
   const { toast } = useToast();
 
-  const loadTickets = useCallback(async () => {
-    setLoading(true);
+  const loadTickets = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       if (!session) {
         setTickets([]);
@@ -66,16 +66,22 @@ export const useServiceTickets = () => {
       setTickets(data || []);
     } catch (error) {
       console.error("Failed to load service tickets:", error);
-      toast({
-        title: "Kunde inte hämta ärenden",
-        description: "Ett fel uppstod vid hämtning av data från databasen.",
-        variant: "destructive",
-      });
+      if (!silent) {
+        toast({
+          title: "Kunde inte hämta ärenden",
+          description: "Ett fel uppstod vid hämtning av data från databasen.",
+          variant: "destructive",
+        });
+      }
       setTickets([]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [session, toast, token]);
+
+  // Silent refresh — updates tickets without showing full-page spinner
+  // (prevents unmounting open TicketRow components)
+  const silentRefresh = useCallback(() => loadTickets({ silent: true }), [loadTickets]);
 
   useEffect(() => {
     if (!authLoading) {
@@ -146,5 +152,5 @@ export const useServiceTickets = () => {
     }
   }, [toast, token]);
   
-  return { tickets, addTicket, loading: loading || authLoading, refreshTickets: loadTickets, updateTicket };
+  return { tickets, addTicket, loading: loading || authLoading, refreshTickets: silentRefresh, updateTicket };
 };
