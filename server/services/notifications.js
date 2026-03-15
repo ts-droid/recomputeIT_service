@@ -259,18 +259,25 @@ const buildNotificationPreview = async ({ templateType, ticket, language, settin
     final_cost: localizedTicket.final_cost || '',
   };
 
-  if (templateType === 'kostnadsforslag') {
+  if (templateType === 'kostnadsforslag' || templateType === 'kostnadsforslag_uppdatering') {
+    const isUpdate = templateType === 'kostnadsforslag_uppdatering';
     const amount = ticket.final_cost || '—';
+    const templateKey = isUpdate ? 'costProposalUpdate' : 'costProposal';
+    const promptKey = isUpdate ? 'cost_update_prompt_by_lang' : 'cost_prompt_by_lang';
     const messageBase =
+      textTemplates[templateKey]?.[language]?.(localizedTicket, amount) ||
+      textTemplates[templateKey]?.sv(localizedTicket, amount) ||
       textTemplates.costProposal[language]?.(localizedTicket, amount) ||
       textTemplates.costProposal.sv(localizedTicket, amount);
     let sms = await translateIfNeeded(messageBase, language);
     const template =
+      emailTemplates[templateKey]?.[language]?.(localizedTicket, amount) ||
+      emailTemplates[templateKey]?.sv(localizedTicket, amount) ||
       emailTemplates.costProposal[language]?.(localizedTicket, amount) ||
       emailTemplates.costProposal.sv(localizedTicket, amount);
     const subject = await translateIfNeeded(template.subject, language);
     let body = await translateIfNeeded(template.body, language);
-    const localizedCostPrompt = await getLocalizedSetting(activeSettings.cost_prompt_by_lang, language);
+    const localizedCostPrompt = await getLocalizedSetting(activeSettings[promptKey] || activeSettings.cost_prompt_by_lang, language);
     body = appendUniqueBlock(body, renderMessageSettingTemplate(localizedCostPrompt, commonVariables));
     body = appendUniqueBlock(body, emailFooter);
     body = appendReplyGuidance(body, language, replyToken);

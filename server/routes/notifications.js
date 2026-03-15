@@ -149,7 +149,7 @@ const sendNotification = async ({ ticket, channel, message, translatedSubject, t
 // ---------------------------------------------------------------------------
 router.post('/notify/cost-proposal', requireAuth, requireRole('service'), requireTenant, async (req, res) => {
   try {
-    const { ticketId, channel, language: requestedLanguage } = req.body || {};
+    const { ticketId, channel, language: requestedLanguage, templateType: clientTemplateType } = req.body || {};
     const { rows } = await query('SELECT * FROM service_tickets WHERE id = $1 AND tenant_id = $2', [ticketId, req.tenantId]);
     const ticket = rows[0];
     if (!ticket) return res.status(404).json({ error: 'Ärende hittades inte.' });
@@ -161,8 +161,9 @@ router.post('/notify/cost-proposal', requireAuth, requireRole('service'), requir
     }
     const localizedTicket = await localizeTicketFreeText(ticket, language, { strict: language !== 'sv' });
     const messageSettings = await getAdminMessageSettings(req.tenantId);
+    const effectiveTemplateType = clientTemplateType === 'kostnadsforslag_uppdatering' ? 'kostnadsforslag_uppdatering' : 'kostnadsforslag';
     const preview = await buildNotificationPreview({
-      templateType: 'kostnadsforslag',
+      templateType: effectiveTemplateType,
       ticket: localizedTicket,
       language,
       settings: messageSettings,

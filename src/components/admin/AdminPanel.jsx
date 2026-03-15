@@ -31,6 +31,7 @@ const normalizeSettingsPayload = (data = {}) => ({
   email_footer_by_lang: { ...emptyByLang(), ...(data?.email_footer_by_lang || {}) },
   sms_footer_by_lang: { ...emptyByLang(), ...(data?.sms_footer_by_lang || {}) },
   cost_prompt_by_lang: { ...emptyByLang(), ...(data?.cost_prompt_by_lang || {}) },
+  cost_update_prompt_by_lang: { ...emptyByLang(), ...(data?.cost_update_prompt_by_lang || {}) },
   ready_prompt_by_lang: { ...emptyByLang(), ...(data?.ready_prompt_by_lang || {}) },
   decision_approved_sms_by_lang: { ...emptyByLang(), ...(data?.decision_approved_sms_by_lang || {}) },
   decision_approved_email_subject_by_lang: {
@@ -488,6 +489,25 @@ export function AdminPanel() {
                           <Textarea
                             value={messageSettings.cost_prompt_by_lang?.[lang.code] || ''}
                             onChange={(event) => updateSettingField('cost_prompt_by_lang', lang.code, event.target.value)}
+                            className="min-h-[90px]"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="border border-gray-200 rounded-xl p-4">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-1">Standardtext: Uppdaterat kostnadsförslag</h3>
+                    <p className="text-xs text-gray-500 mb-3">
+                      Skickas när ett kostnadsförslag revideras. Variabler: <code>{'{{diagnosis}}'}</code>, <code>{'{{amount}}'}</code>, <code>{'{{ticket_number}}'}</code>, <code>{'{{customer_name}}'}</code>.
+                    </p>
+                    <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
+                      {LANGUAGE_OPTIONS.map((lang) => (
+                        <div key={`cost-update-prompt-${lang.code}`}>
+                          <Label className="mb-2 block">{lang.label}</Label>
+                          <Textarea
+                            value={messageSettings.cost_update_prompt_by_lang?.[lang.code] || ''}
+                            onChange={(event) => updateSettingField('cost_update_prompt_by_lang', lang.code, event.target.value)}
                             className="min-h-[90px]"
                           />
                         </div>

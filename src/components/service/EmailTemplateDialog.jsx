@@ -46,7 +46,8 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
   const [previewError, setPreviewError] = useState('');
   const { toast } = useToast();
 
-  const isCostProposal = templateType === 'kostnadsforslag';
+  const isCostProposal = templateType === 'kostnadsforslag' || templateType === 'kostnadsforslag_uppdatering';
+  const isCostProposalUpdate = templateType === 'kostnadsforslag_uppdatering';
   const requireStrictTranslatedPreview = templateType === 'reparationFardig';
   const placeholderText = translationPlaceholders[currentLang] || translationPlaceholders.sv;
 
@@ -149,7 +150,8 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
       onUpdate(ticket.id, {
         status: 'Väntar på kund',
         final_cost: costProposal,
-        diagnosis: diagnosis, // Save original diagnosis to DB
+        cost_proposal: costProposal,
+        diagnosis: diagnosis,
         disclaimer_language: currentLang,
       });
     }
@@ -158,7 +160,7 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
 
   const sendNotification = async (channel) => {
     if (!ticket || !templateType) return;
-    if (templateType === 'kostnadsforslag' && !costProposal) {
+    if (isCostProposal && !costProposal) {
       toast({
         title: "Kostnad saknas",
         description: "Ange kostnadsförslag innan du skickar.",
@@ -169,12 +171,11 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
 
     setIsSending(true);
     try {
-      if (templateType === 'kostnadsforslag') {
+      if (isCostProposal) {
         await onUpdate(ticket.id, { final_cost: costProposal, diagnosis });
       }
 
-      const endpoint =
-        templateType === 'kostnadsforslag' ? '/api/notify/cost-proposal' : '/api/notify/repair-ready';
+      const endpoint = isCostProposal ? '/api/notify/cost-proposal' : '/api/notify/repair-ready';
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -186,6 +187,7 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
           ticketId: ticket.id,
           channel,
           language: currentLang,
+          ...(isCostProposalUpdate && { templateType: 'kostnadsforslag_uppdatering' }),
         }),
       });
 
@@ -258,10 +260,12 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
       <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>
-            {isCostProposal ? 'Underlag för kostnadsförslag' : 'Meddelande till kund'}
+            {isCostProposalUpdate ? 'Uppdaterat kostnadsförslag' : isCostProposal ? 'Underlag för kostnadsförslag' : 'Meddelande till kund'}
           </DialogTitle>
           <DialogDescription>
-            {isCostProposal
+            {isCostProposalUpdate
+              ? 'Granska och skicka det uppdaterade kostnadsförslaget till kunden.'
+              : isCostProposal
               ? 'Granska, kopiera och skicka detta kostnadsförslag till kunden.'
               : 'Granska, kopiera och skicka meddelande om färdig reparation.'}
           </DialogDescription>

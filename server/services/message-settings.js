@@ -9,6 +9,12 @@ export const textTemplates = {
     en: (ticket, amount) =>
       `Hi ${ticket.customer_name}!\nCase #${ticket.ticket_number} (${ticket.device_type}${ticket.device_model ? ` ${ticket.device_model}` : ''}).\nDiagnosis: ${ticket.diagnosis || 'See detailed info from the service desk.'}\nCost proposal: ${amount} SEK.\nReply YES to approve or NO to decline.`,
   },
+  costProposalUpdate: {
+    sv: (ticket, amount) =>
+      `Hej ${ticket.customer_name}!\nÄrende #${ticket.ticket_number} (${ticket.device_type}${ticket.device_model ? ` ${ticket.device_model}` : ''}).\nVi har ett uppdaterat kostnadsförslag.\nDiagnos: ${ticket.diagnosis || 'Se bifogad information från butik.'}\nNytt kostnadsförslag: ${amount} kr.\nSvara JA för godkännande eller NEJ för att avböja.`,
+    en: (ticket, amount) =>
+      `Hi ${ticket.customer_name}!\nCase #${ticket.ticket_number} (${ticket.device_type}${ticket.device_model ? ` ${ticket.device_model}` : ''}).\nWe have an updated cost proposal.\nDiagnosis: ${ticket.diagnosis || 'See detailed info from the service desk.'}\nNew cost proposal: ${amount} SEK.\nReply YES to approve or NO to decline.`,
+  },
   repairReady: {
     sv: (ticket) =>
       `Hej ${ticket.customer_name}!\nDin enhet för ärende #${ticket.ticket_number} är klar för upphämtning.\n${ticket.final_cost ? `Slutlig kostnad: ${ticket.final_cost} kr.\n` : ''}${ticket.work_done_summary ? `Utförda åtgärder: ${ticket.work_done_summary}\n` : ''}Välkommen in!`,
@@ -26,6 +32,16 @@ export const emailTemplates = {
     en: (ticket, amount) => ({
       subject: `Cost proposal for case #${ticket.ticket_number}`,
       body: `Hi ${ticket.customer_name},\n\nWe have prepared a cost proposal for your case (#${ticket.ticket_number}).\nCost: ${amount} SEK.`,
+    }),
+  },
+  costProposalUpdate: {
+    sv: (ticket, amount) => ({
+      subject: `Uppdaterat kostnadsförslag för ärende #${ticket.ticket_number}`,
+      body: `Hej ${ticket.customer_name},\n\nVi har ett uppdaterat kostnadsförslag för ditt ärende (#${ticket.ticket_number}).\nNy kostnad: ${amount} kr.`,
+    }),
+    en: (ticket, amount) => ({
+      subject: `Updated cost proposal for case #${ticket.ticket_number}`,
+      body: `Hi ${ticket.customer_name},\n\nWe have an updated cost proposal for your case (#${ticket.ticket_number}).\nNew cost: ${amount} SEK.`,
     }),
   },
   repairReady: {
@@ -52,6 +68,10 @@ export const DEFAULT_MESSAGE_SETTINGS = {
   cost_prompt_by_lang: {
     sv: 'Svara gärna på detta mail eller via SMS med JA för godkännande, eller NEJ om du vill avböja.',
     en: 'Please reply with YES to approve, or NO to decline.',
+  },
+  cost_update_prompt_by_lang: {
+    sv: 'Vi har reviderat kostnadsförslaget. Svara JA för att godkänna det nya förslaget, eller NEJ för att avböja.',
+    en: 'We have revised the cost proposal. Reply YES to approve the new proposal, or NO to decline.',
   },
   ready_prompt_by_lang: {
     sv: 'Har du frågor, svara på detta mail eller SMS.',
@@ -112,6 +132,7 @@ export const mergeMessageSettings = (raw) => {
     email_footer_by_lang: mergeByLang('email_footer_by_lang'),
     sms_footer_by_lang: mergeByLang('sms_footer_by_lang'),
     cost_prompt_by_lang: mergeByLang('cost_prompt_by_lang'),
+    cost_update_prompt_by_lang: mergeByLang('cost_update_prompt_by_lang'),
     ready_prompt_by_lang: mergeByLang('ready_prompt_by_lang'),
     decision_approved_sms_by_lang: mergeByLang('decision_approved_sms_by_lang'),
     decision_approved_email_subject_by_lang: mergeByLang('decision_approved_email_subject_by_lang'),
@@ -175,6 +196,9 @@ export const autoTranslateMessageSettings = async (settings = {}) => {
       overwriteExisting: true,
     }),
     cost_prompt_by_lang: await fillMissingTranslations(normalized.cost_prompt_by_lang, {
+      overwriteExisting: true,
+    }),
+    cost_update_prompt_by_lang: await fillMissingTranslations(normalized.cost_update_prompt_by_lang, {
       overwriteExisting: true,
     }),
     ready_prompt_by_lang: await fillMissingTranslations(normalized.ready_prompt_by_lang, {

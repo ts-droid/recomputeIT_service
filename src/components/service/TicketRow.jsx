@@ -96,6 +96,9 @@ const cleanChatBody = (body = '') => {
     if (/^den .+skrev:$/i.test(trimmed)) break;
     if (/^(from:|från:|sent:|skickat:|to:|till:|subject:|ämne:)/i.test(trimmed)) break;
     if (lower.includes('recompute_reply_start') || lower.includes('svc_reply_start')) break;
+    if (lower.includes('svc_outbound_start') || lower.includes('svc_outbound_end')) continue;
+    if (lower.includes('recompute_outbound_start') || lower.includes('recompute_outbound_end')) continue;
+    if (trimmed === '----------<>----------') continue;
     if (lower.includes('svara ovanför denna linje')) break;
     if (lower.includes('reply above this line')) break;
 
@@ -409,7 +412,7 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
       return;
     }
 
-    if (templateType === 'kostnadsforslag') {
+    if (templateType === 'kostnadsforslag' || templateType === 'kostnadsforslag_uppdatering') {
       clearDirty('planned_actions');
       clearDirty('cost_proposal');
       await onUpdate(ticket.id, {
@@ -622,7 +625,7 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
                               : 'bg-white border-gray-200 text-gray-800 rounded-bl-md'
                           }`}>
                           <p className="font-semibold text-gray-700">
-                            {msg.direction === 'outbound' ? 'Ni' : customerFirstName} · {channelLabel(msg.channel)}
+                            {msg.direction === 'outbound' ? (msg.sender_user || import.meta.env.VITE_BRAND_NAME || 're:Compute-IT') : customerFirstName} · {channelLabel(msg.channel)}
                           </p>
                           {msg.subject && <p className="text-gray-700 mt-1 break-words">{msg.subject}</p>}
                           {msg.body && <p className="text-gray-700 mt-1 break-words whitespace-pre-wrap">{cleanChatBody(msg.body) || msg.body}</p>}
@@ -748,7 +751,7 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
                             variant="outline"
                             className="border-purple-500/50 bg-purple-50 text-purple-700 hover:bg-purple-100 hover:text-purple-800 gap-2"
                             onClick={() => {
-                              handleNotify('kostnadsforslag');
+                              handleNotify(hasSentCostProposal ? 'kostnadsforslag_uppdatering' : 'kostnadsforslag');
                               setShowUpdateProposal(false);
                             }}
                             disabled={(!ticket.customer_email && !ticket.customer_phone) || !canEdit}

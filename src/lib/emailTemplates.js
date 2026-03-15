@@ -8,6 +8,10 @@ const templates = {
       subject: `Kostnadsförslag: Ärende ${ticket.ticket_number}`,
       body: `Hej ${ticket.customer_name},\n\nVi har felsökt din ${ticket.device_type} ${ticket.device_model || ''} med ärendenummer ${ticket.ticket_number} och har ett kostnadsförslag till dig.\n\nDiagnos:\n${ticket.diagnosis || '[BESKRIV DIAGNOS HÄR]'}\n\nTotal kostnad för reparation: ${ticket.final_cost || '[PRIS]'} kr\n\nVänligen meddela oss om du vill gå vidare med reparationen.\n\nMed vänliga hälsningar,\nDitt serviceteam`
     }),
+    kostnadsforslag_uppdatering: (ticket) => ({
+      subject: `Uppdaterat kostnadsförslag: Ärende ${ticket.ticket_number}`,
+      body: `Hej ${ticket.customer_name},\n\nVi har ett uppdaterat kostnadsförslag för din ${ticket.device_type} ${ticket.device_model || ''} med ärendenummer ${ticket.ticket_number}.\n\nDiagnos:\n${ticket.diagnosis || '[BESKRIV DIAGNOS HÄR]'}\n\nNy total kostnad för reparation: ${ticket.final_cost || '[PRIS]'} kr\n\nVänligen meddela oss om du vill gå vidare med reparationen.\n\nMed vänliga hälsningar,\nDitt serviceteam`
+    }),
   },
   en: {
     reparationFardig: (ticket) => ({
@@ -17,6 +21,10 @@ const templates = {
     kostnadsforslag: (ticket) => ({
       subject: `Price Quote: Case ${ticket.ticket_number}`,
       body: `Hi ${ticket.customer_name},\n\nWe have diagnosed your ${ticket.device_type} ${ticket.device_model || ''} with case number ${ticket.ticket_number} and have a price quote for you.\n\nDiagnosis:\n${ticket.diagnosis || '[DESCRIBE DIAGNOSIS HERE]'}\n\nTotal repair cost: ${ticket.final_cost || '[PRICE]'} kr\n\nPlease let us know if you wish to proceed with the repair.\n\nBest regards,\nYour Service Team`
+    }),
+    kostnadsforslag_uppdatering: (ticket) => ({
+      subject: `Updated Price Quote: Case ${ticket.ticket_number}`,
+      body: `Hi ${ticket.customer_name},\n\nWe have an updated price quote for your ${ticket.device_type} ${ticket.device_model || ''} with case number ${ticket.ticket_number}.\n\nDiagnosis:\n${ticket.diagnosis || '[DESCRIBE DIAGNOSIS HERE]'}\n\nNew total repair cost: ${ticket.final_cost || '[PRICE]'} kr\n\nPlease let us know if you wish to proceed with the repair.\n\nBest regards,\nYour Service Team`
     }),
   },
   ar: {
