@@ -1,11 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useServiceTickets } from '@/hooks/useServiceTickets';
 import { useUiLanguage } from '@/contexts/UiLanguageContext';
-import { Loader2, Hash, User, Smartphone, FileText } from 'lucide-react';
+import { Loader2, Hash, User, Smartphone, FileText, PackageCheck } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { TicketRow } from '@/components/service/TicketRow';
+
+const normalizeStatus = (ticket) =>
+  (ticket.status || '').toString().trim().toLowerCase();
 
 export function ServiceRegister() {
   const { tickets, loading, updateTicket, refreshTickets } = useServiceTickets();
@@ -13,28 +16,45 @@ export function ServiceRegister() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showCompleted, setShowCompleted] = useState(false);
 
-  const isCompletedTicket = (ticket) => {
-    const normalizedStatus = (ticket.status || '').toString().trim().toLowerCase();
+  const isClosedTicket = (ticket) => {
+    const status = normalizeStatus(ticket);
+    return status === 'avslutad' || Boolean(ticket.closed_at) || Boolean(ticket.picked_up_at);
+  };
+
+  const isReadyForPickup = (ticket) => {
+    const status = normalizeStatus(ticket);
+    return status === 'färdig' && !isClosedTicket(ticket);
+  };
+
+  const matchesSearch = (ticket) => {
+    if (searchTerm === '') return true;
+    const term = searchTerm.toLowerCase();
     return (
-      normalizedStatus === 'färdig' ||
-      normalizedStatus === 'avslutad' ||
-      Boolean(ticket.closed_at) ||
-      Boolean(ticket.picked_up_at)
+      ticket.customer_name?.toLowerCase().includes(term) ||
+      ticket.ticket_number?.toString().includes(searchTerm) ||
+      (ticket.device_model && ticket.device_model.toLowerCase().includes(term))
     );
   };
 
-  const filteredTickets = tickets.filter(ticket => {
-    const matchesSearch = searchTerm === '' ||
-      ticket.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ticket.ticket_number.toString().includes(searchTerm) ||
-      (ticket.device_model && ticket.device_model.toLowerCase().includes(searchTerm.toLowerCase()));
+  const { activeTickets, readyTickets, closedTickets } = useMemo(() => {
+    const active = [];
+    const ready = [];
+    const closed = [];
 
-    if (!matchesSearch) return false;
+    for (const ticket of tickets) {
+      if (!matchesSearch(ticket)) continue;
 
-    if (searchTerm.trim()) return true;
+      if (isClosedTicket(ticket)) {
+        closed.push(ticket);
+      } else if (isReadyForPickup(ticket)) {
+        ready.push(ticket);
+      } else {
+        active.push(ticket);
+      }
+    }
 
-    return showCompleted ? isCompletedTicket(ticket) : !isCompletedTicket(ticket);
-  });
+    return { activeTickets: active, readyTickets: ready, closedTickets: closed };
+  }, [tickets, searchTerm]);
 
   if (loading) {
     return (
@@ -43,6 +63,32 @@ export function ServiceRegister() {
       </div>
     );
   }
+
+  const TableHeader = () => (
+    <div className="flex items-center p-4 bg-gray-50 rounded-t-lg font-semibold text-gray-600 text-sm">
+      <div className="w-1/12"></div>
+      <div className="w-2/12 flex items-center gap-2"><Hash size={14} />{t.register.columnTicketNo}</div>
+      <div className="w-3/12 flex items-center gap-2"><User size={14} />{t.register.columnCustomer}</div>
+      <div className="w-3/12 flex items-center gap-2"><Smartphone size={14} />{t.register.columnDevice}</div>
+      <div className="w-3/12 text-right flex items-center gap-2 justify-end"><FileText size={14} />{t.register.columnStatus}</div>
+    </div>
+  );
+
+  const renderTickets = (list) =>
+    list.length > 0 ? (
+      list.map((ticket) => (
+        <TicketRow
+          key={ticket.id}
+          ticket={ticket}
+          onUpdate={updateTicket}
+          onRefreshTickets={refreshTickets}
+        />
+      ))
+    ) : (
+      <div className="text-center p-8 text-gray-500">
+        <p>{t.register.noTicketsFound}</p>
+      </div>
+    );
 
   return (
     <div className="bg-slate-50 p-4 sm:p-6 lg:p-8 rounded-b-2xl">
@@ -65,31 +111,56 @@ export function ServiceRegister() {
           </Label>
         </div>
       </div>
+
+      {/* Active tickets */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="flex items-center p-4 bg-gray-50 rounded-t-lg font-semibold text-gray-600 text-sm">
-          <div className="w-1/12"></div>
-          <div className="w-2/12 flex items-center gap-2"><Hash size={14} />{t.register.columnTicketNo}</div>
-          <div className="w-3/12 flex items-center gap-2"><User size={14} />{t.register.columnCustomer}</div>
-          <div className="w-3/12 flex items-center gap-2"><Smartphone size={14} />{t.register.columnDevice}</div>
-          <div className="w-3/12 text-right flex items-center gap-2 justify-end"><FileText size={14} />{t.register.columnStatus}</div>
-        </div>
+        <TableHeader />
         <div className="p-2">
-          {filteredTickets.length > 0 ? (
-            filteredTickets.map(ticket => (
-              <TicketRow
-                key={ticket.id}
-                ticket={ticket}
-                onUpdate={updateTicket}
-                onRefreshTickets={refreshTickets}
-              />
-            ))
-          ) : (
-            <div className="text-center p-12 text-gray-500">
-              <p>{t.register.noTicketsFound}</p>
-            </div>
-          )}
+          {renderTickets(activeTickets)}
         </div>
       </div>
+
+      {/* Ready for pickup */}
+      {readyTickets.length > 0 && (
+        <div className="mt-8">
+          <div className="flex items-center gap-2 mb-3">
+            <PackageCheck size={18} className="text-green-600" />
+            <h3 className="text-lg font-semibold text-gray-800">
+              Klara för upphämtning
+            </h3>
+            <span className="bg-green-100 text-green-700 text-xs font-medium px-2 py-0.5 rounded-full">
+              {readyTickets.length}
+            </span>
+          </div>
+          <div className="bg-white rounded-lg shadow-sm border border-green-200">
+            <TableHeader />
+            <div className="p-2">
+              {renderTickets(readyTickets)}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Completed / closed tickets */}
+      {showCompleted && closedTickets.length > 0 && (
+        <div className="mt-8">
+          <div className="flex items-center gap-2 mb-3">
+            <FileText size={18} className="text-gray-500" />
+            <h3 className="text-lg font-semibold text-gray-600">
+              Avslutade ärenden
+            </h3>
+            <span className="bg-gray-100 text-gray-600 text-xs font-medium px-2 py-0.5 rounded-full">
+              {closedTickets.length}
+            </span>
+          </div>
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            <TableHeader />
+            <div className="p-2">
+              {renderTickets(closedTickets)}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
