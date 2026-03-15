@@ -177,11 +177,11 @@ router.post('/email-inbound', async (req, res) => {
       ]
     );
 
-    let decision = parseApprovalDecision(inboundReplyText);
+    let decision = await parseApprovalDecision(inboundReplyText);
     if (!decision && !inbound.text && req.rawBody) {
       const fallbackSnippet = extractReplySnippetFromRawWebhook(req.rawBody);
       if (fallbackSnippet) {
-        decision = parseApprovalDecision(extractTopReplyText(fallbackSnippet));
+        decision = await parseApprovalDecision(extractTopReplyText(fallbackSnippet));
       }
     }
 
@@ -315,7 +315,7 @@ router.post('/46elks', async (req, res) => {
       [tenantId, ticket.id, 'sms', 'inbound', from, messageWithSwedish, '46elks', providerId]
     );
 
-    const decision = parseApprovalDecision(message);
+    const decision = await parseApprovalDecision(message);
     console.log('46elks inbound decision parsed', { ticketId: ticket.id, rawMessage: message, decision, providerId });
 
     if (decision === 'yes') {

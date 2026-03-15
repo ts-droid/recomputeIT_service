@@ -281,24 +281,13 @@ export const extractTopReplyText = (rawMessage = '') => {
 // ---------------------------------------------------------------------------
 // Approval decision parser (multilingual yes/no)
 // ---------------------------------------------------------------------------
-export const parseApprovalDecision = (rawMessage = '') => {
-  const message = cleanVisibleReplyText(extractTopReplyText(rawMessage));
-  if (!message) return null;
-
-  // Try to focus on customer's own reply, not quoted thread below.
+// ---------------------------------------------------------------------------
+// Regex-based fallback decision parser
+// ---------------------------------------------------------------------------
+const parseApprovalDecisionRegex = (message) => {
   const cutMarkers = [
-    '\n>',
-    '\n--',
-    '\nfrån:',
-    '\nfrom:',
-    '\non ',
-    '\nden ',
-    '\nle ',
-    '\nam ',
-    '\nel ',
-    '\nكتب ',
-    '\nwrote:',
-    '\nskrev:',
+    '\n>', '\n--', '\nfrån:', '\nfrom:', '\non ', '\nden ',
+    '\nle ', '\nam ', '\nel ', '\nكتب ', '\nwrote:', '\nskrev:',
   ];
   const lowerMessage = message.toLowerCase();
   let cutoff = lowerMessage.length;
@@ -318,76 +307,32 @@ export const parseApprovalDecision = (rawMessage = '') => {
   if (!normalized) return null;
 
   const yesPatterns = [
-    /\bja\b/,
-    /\byes\b/,
-    /\byep\b/,
-    /\byeah\b/,
-    /\byup\b/,
-    /\bok\b/,
-    /\bokej\b/,
-    /\bokay\b/,
-    /\bgodkann\w*\b/,
-    /\bapprove\w*\b/,
-    /\baccept\w*\b/,
-    /\bproceed\w*\b/,
-    /\bcontinue\w*\b/,
-    /\bgo on\b/,
-    /\bgo ahead\b/,
-    /\bdo it\b/,
-    /\bkor\b/,
-    /\bsi\b/,
-    /\bsi claro\b/,
-    /\bev(et)?\b/,
-    /\btak\b/,
-    /\bkylla\b/,
-    /\bere\b/,
-    /\bta(k)?\b/,
-    /\bniam\b/,
-    /\bnaam\b/,
-    /(^|\s)نعم(\s|$)/u,
-    /(^|\s)اي(\s|$)/u,
-    /(^|\s)أيوه(\s|$)/u,
-    /(^|\s)ايوه(\s|$)/u,
-    /(^|\s)اوكي(\s|$)/u,
-    /(^|\s)موافق(\s|$)/u,
-    /(^|\s)موافقه(\s|$)/u,
-    /(^|\s)تاک(\s|$)/u,
-    /(^|\s)так(\s|$)/u,
-    /(^|\s)да(\s|$)/u,
-    /(^|\s)موافق\w*(\s|$)/u,
-    /(^|\s)تمام(\s|$)/u,
+    /\bja\b/, /\byes\b/, /\byep\b/, /\byeah\b/, /\byup\b/,
+    /\bok\b/, /\bokej\b/, /\bokay\b/, /\bgodkann\w*\b/,
+    /\bapprove\w*\b/, /\baccept\w*\b/, /\bproceed\w*\b/,
+    /\bcontinue\w*\b/, /\bgo on\b/, /\bgo ahead\b/, /\bdo it\b/,
+    /\bkor\b/, /\bsi\b/, /\bsi claro\b/, /\bev(et)?\b/, /\btak\b/,
+    /\bkylla\b/, /\bere\b/, /\bta(k)?\b/, /\bniam\b/, /\bnaam\b/,
+    /\bvisst\b/, /\babsolut\b/, /\bsjalvklart\b/, /\bgor det\b/,
+    /\bdet gar bra\b/, /\bdet ar ok\b/, /\bsure\b/, /\bof course\b/,
+    /\bfine\b/, /\bagree\w*\b/, /\bconfirm\w*\b/, /\bdet funkar\b/,
+    /\bsjakert\b/, /\bklart\b/, /\bkor pa\b/, /\bkor igång\b/,
+    /(^|\s)نعم(\s|$)/u, /(^|\s)اي(\s|$)/u, /(^|\s)أيوه(\s|$)/u,
+    /(^|\s)ايوه(\s|$)/u, /(^|\s)اوكي(\s|$)/u, /(^|\s)موافق(\s|$)/u,
+    /(^|\s)موافقه(\s|$)/u, /(^|\s)تاک(\s|$)/u, /(^|\s)так(\s|$)/u,
+    /(^|\s)да(\s|$)/u, /(^|\s)موافق\w*(\s|$)/u, /(^|\s)تمام(\s|$)/u,
   ];
   const noPatterns = [
-    /\bnej\b/,
-    /\bno\b/,
-    /\bnope\b/,
-    /\bnah\b/,
-    /\bavboj\w*\b/,
-    /\bdeclin\w*\b/,
-    /\breject\w*\b/,
-    /\bdon t approve\b/,
-    /\bdo not approve\b/,
-    /\bdon t proceed\b/,
-    /\bdo not proceed\b/,
-    /\bnot now\b/,
-    /\bnot interested\b/,
-    /\bcancel\w*\b/,
-    /\bstop\b/,
-    /\bnon\b/,
-    /\bhayir\b/,
-    /\bhayr\b/,
-    /\bnie\b/,
-    /\bei\b/,
-    /\bna\b/,
-    /\bne\b/,
-    /(^|\s)لا(\s|$)/u,
-    /(^|\s)كلا(\s|$)/u,
-    /(^|\s)مو(\s|$)/u,
-    /(^|\s)ليس(\s|$)/u,
-    /(^|\s)غير موافق(\s|$)/u,
-    /(^|\s)niet(\s|$)/u,
-    /(^|\s)ні(\s|$)/u,
-    /(^|\s)ніт(\s|$)/u,
+    /\bnej\b/, /\bno\b/, /\bnope\b/, /\bnah\b/, /\bavboj\w*\b/,
+    /\bdeclin\w*\b/, /\breject\w*\b/, /\bdon t approve\b/,
+    /\bdo not approve\b/, /\bdon t proceed\b/, /\bdo not proceed\b/,
+    /\bnot now\b/, /\bnot interested\b/, /\bcancel\w*\b/, /\bstop\b/,
+    /\bnon\b/, /\bhayir\b/, /\bhayr\b/, /\bnie\b/,
+    /\bfor dyrt\b/, /\binte vart\b/, /\binte intresserad\b/,
+    /\btoo expensive\b/, /\bnot worth\b/, /\bskip\b/,
+    /(^|\s)لا(\s|$)/u, /(^|\s)كلا(\s|$)/u, /(^|\s)مو(\s|$)/u,
+    /(^|\s)ليس(\s|$)/u, /(^|\s)غير موافق(\s|$)/u,
+    /(^|\s)niet(\s|$)/u, /(^|\s)ні(\s|$)/u, /(^|\s)ніт(\s|$)/u,
   ];
 
   const findFirstIndex = (patterns) => {
@@ -406,6 +351,78 @@ export const parseApprovalDecision = (rawMessage = '') => {
   if (yesIndex !== -1 && (noIndex === -1 || yesIndex < noIndex)) return 'yes';
   if (noIndex !== -1 && (yesIndex === -1 || noIndex < yesIndex)) return 'no';
   return null;
+};
+
+// ---------------------------------------------------------------------------
+// AI-powered decision parsing (DeepSeek) with regex fallback
+// ---------------------------------------------------------------------------
+const AI_DECISION_PROMPT = `You are a customer reply classifier for a repair service.
+The customer was asked to approve or decline a cost proposal for repairing their device.
+Classify the customer's reply as exactly one of: YES, NO, or UNKNOWN.
+
+Rules:
+- YES = the customer approves, agrees, accepts, or says anything affirmative in any language
+- NO = the customer declines, rejects, refuses, or says anything negative in any language
+- UNKNOWN = the reply is ambiguous, asks a question, or is unrelated
+
+Reply with ONLY one word: YES, NO, or UNKNOWN. Nothing else.`;
+
+const classifyWithAI = async (customerReply) => {
+  const { DEEPSEEK_API_KEY, DEEPSEEK_MODEL } = await import('../lib/constants.js');
+  if (!DEEPSEEK_API_KEY) return null;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
+    const response = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: DEEPSEEK_MODEL,
+        max_tokens: 5,
+        temperature: 0,
+        messages: [
+          { role: 'system', content: AI_DECISION_PROMPT },
+          { role: 'user', content: customerReply.slice(0, 500) },
+        ],
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeout);
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const answer = (data?.choices?.[0]?.message?.content || '').trim().toUpperCase();
+
+    if (answer === 'YES') return 'yes';
+    if (answer === 'NO') return 'no';
+    return null; // UNKNOWN or unexpected → fall through to regex
+  } catch (error) {
+    console.warn('AI decision classification failed, using regex fallback:', error?.message);
+    return null;
+  }
+};
+
+export const parseApprovalDecision = async (rawMessage = '') => {
+  const message = cleanVisibleReplyText(extractTopReplyText(rawMessage));
+  if (!message) return null;
+
+  // Try AI classification first
+  const aiDecision = await classifyWithAI(message);
+  if (aiDecision) {
+    console.log('Decision from AI:', aiDecision, '| message:', message.slice(0, 80));
+    return aiDecision;
+  }
+
+  // Fallback to regex patterns
+  const regexDecision = parseApprovalDecisionRegex(message);
+  console.log('Decision from regex:', regexDecision, '| message:', message.slice(0, 80));
+  return regexDecision;
 };
 
 // ---------------------------------------------------------------------------
