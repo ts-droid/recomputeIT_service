@@ -190,19 +190,40 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
     }
   }, [API_BASE_URL, ticket.id, token]);
 
+  const prevMessageCountRef = React.useRef(0);
+
+  const pollMessages = useCallback(async () => {
+    if (!token) return;
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/tickets/${ticket.id}/messages`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      const newMessages = Array.isArray(data) ? data : [];
+      setMessages(newMessages);
+
+      // Only refresh ticket data when a new message has arrived
+      if (newMessages.length > prevMessageCountRef.current && prevMessageCountRef.current > 0) {
+        onRefreshTickets?.();
+      }
+      prevMessageCountRef.current = newMessages.length;
+    } catch {
+      // silent — polling failure is not critical
+    }
+  }, [API_BASE_URL, ticket.id, token, onRefreshTickets]);
+
   useEffect(() => {
     if (isOpen) {
-      loadMessages();
-      onRefreshTickets?.();
-      const pollInterval = window.setInterval(() => {
-        loadMessages();
-        onRefreshTickets?.();
-      }, 8000);
+      loadMessages().then(() => {
+        prevMessageCountRef.current = messages.length;
+      });
 
+      const pollInterval = window.setInterval(pollMessages, 15000);
       return () => window.clearInterval(pollInterval);
     }
     return undefined;
-  }, [isOpen, loadMessages, onRefreshTickets]);
+  }, [isOpen, loadMessages, pollMessages]);
 
   const handleSendManualEmail = async () => {
     if (!canEdit) return;
