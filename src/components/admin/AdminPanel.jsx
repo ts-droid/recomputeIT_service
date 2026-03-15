@@ -91,10 +91,10 @@ export function AdminPanel() {
   const [messageTab, setMessageTab] = useState('footers');
   const [form, setForm] = useState({
     email: '',
-    password: '',
     role: 'base',
     name: '',
   });
+  const [resettingUserId, setResettingUserId] = useState(null);
 
   const canView = role === 'admin';
 
@@ -224,10 +224,10 @@ export function AdminPanel() {
 
   const createUser = async (event) => {
     event.preventDefault();
-    if (!form.email || !form.password || !form.role) {
+    if (!form.email || !form.role) {
       toast({
         title: 'Fyll i alla fält',
-        description: 'E-post, lösenord och roll krävs.',
+        description: 'E-post och roll krävs.',
         variant: 'destructive',
       });
       return;
@@ -246,10 +246,10 @@ export function AdminPanel() {
 
       const newUser = await response.json();
       setUsers((prev) => [newUser, ...prev]);
-      setForm({ email: '', password: '', role: 'base', name: '' });
+      setForm({ email: '', role: 'base', name: '' });
       toast({
         title: 'Användare skapad',
-        description: `${newUser.email} (${newUser.role})`,
+        description: `${newUser.email} — lösenord skickas via e-post.`,
       });
     } catch (error) {
       console.error('Create user error:', error);
@@ -258,6 +258,32 @@ export function AdminPanel() {
         description: 'Kontrollera uppgifterna och försök igen.',
         variant: 'destructive',
       });
+    }
+  };
+
+  const resetPassword = async (userId) => {
+    if (!window.confirm('Nollställ lösenord? Ett nytt lösenord skickas till användaren via e-post.')) return;
+    setResettingUserId(userId);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/reset-password`, {
+        method: 'POST',
+        headers,
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || 'Reset error');
+      toast({
+        title: 'Lösenord nollställt',
+        description: data.emailSent ? 'Nytt lösenord skickat via e-post.' : data.message || 'Lösenord nollställt.',
+      });
+    } catch (error) {
+      console.error('Reset password error:', error);
+      toast({
+        title: 'Kunde inte nollställa lösenord',
+        description: error?.message || 'Försök igen.',
+        variant: 'destructive',
+      });
+    } finally {
+      setResettingUserId(null);
     }
   };
 
@@ -684,17 +710,7 @@ export function AdminPanel() {
                     placeholder="namn@foretag.se"
                     required
                   />
-                </div>
-                <div>
-                  <Label htmlFor="admin-password">Lösenord</Label>
-                  <Input
-                    id="admin-password"
-                    type="password"
-                    value={form.password}
-                    onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
-                    placeholder="Minst 8 tecken"
-                    required
-                  />
+                  <p className="text-xs text-gray-500 mt-1">Ett slumpmässigt lösenord genereras och skickas till denna adress.</p>
                 </div>
                 <div>
                   <Label>Roll</Label>
@@ -733,19 +749,30 @@ export function AdminPanel() {
                         <p className="text-sm font-semibold text-gray-900">{user.name || user.email}</p>
                         <p className="text-xs text-gray-500">{user.email}</p>
                       </div>
-                      <Select
-                        value={user.role}
-                        onValueChange={(value) => updateUser(user.id, { role: value })}
-                      >
-                        <SelectTrigger className="w-[140px] bg-white">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="base">Bas</SelectItem>
-                          <SelectItem value="service">Service</SelectItem>
-                          <SelectItem value="admin">Admin</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => resetPassword(user.id)}
+                          disabled={resettingUserId === user.id}
+                          className="text-xs"
+                        >
+                          {resettingUserId === user.id ? 'Nollställer...' : 'Nollställ lösenord'}
+                        </Button>
+                        <Select
+                          value={user.role}
+                          onValueChange={(value) => updateUser(user.id, { role: value })}
+                        >
+                          <SelectTrigger className="w-[140px] bg-white">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="base">Bas</SelectItem>
+                            <SelectItem value="service">Service</SelectItem>
+                            <SelectItem value="admin">Admin</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                   ))
                 )}

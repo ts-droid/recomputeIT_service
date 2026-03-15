@@ -170,9 +170,11 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
     setComposeSubject(`Re: Ärende #${ticket.ticket_number}`);
   }, [ticket]);
 
+  const hasLoadedMessagesRef = React.useRef(false);
+
   const loadMessages = useCallback(async () => {
     if (!token) return;
-    setLoadingMessages(true);
+    if (!hasLoadedMessagesRef.current) setLoadingMessages(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/tickets/${ticket.id}/messages`, {
         headers: {
@@ -182,6 +184,7 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
       if (!response.ok) throw new Error('Kunde inte hämta kommunikationslogg.');
       const data = await response.json();
       setMessages(Array.isArray(data) ? data : []);
+      hasLoadedMessagesRef.current = true;
     } catch (error) {
       console.error(error);
       setMessages([]);
