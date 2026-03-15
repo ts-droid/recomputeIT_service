@@ -136,6 +136,15 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
   const hasNewCustomerMessage = Boolean(ticket.has_new_customer_message);
   const canCloseWithoutAction =
     ticket.status === 'Kostnadsförslag nekat' || ticket.last_customer_decision === 'declined';
+  const hasSentCostProposal = Boolean(
+    ticket.cost_proposal && (
+      ticket.status === 'Väntar på kund' ||
+      ticket.status === 'Kostnadsförslag godkänt' ||
+      ticket.status === 'Kostnadsförslag nekat' ||
+      ticket.last_customer_decision
+    )
+  );
+  const [showUpdateProposal, setShowUpdateProposal] = useState(false);
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
   const sortedMessages = useMemo(
     () => [...messages].sort((a, b) => new Date(a.created_at) - new Date(b.created_at)),
@@ -694,26 +703,72 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
                       <DollarSign size={16} />
                       Kostnadsförslag (kr)
                     </Label>
-                    <Input
-                      id={`cost-proposal-${ticket.id}`}
-                      value={costProposal}
-                      onChange={(e) => { markDirty('cost_proposal'); setCostProposal(e.target.value); }}
-                      onBlur={() => handleFieldUpdate('cost_proposal', costProposal)}
-                      placeholder="t.ex. 1299"
-                      className="bg-white"
-                      disabled={!canEdit}
-                    />
-                    <div className="mt-3">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-purple-500/50 bg-purple-50 text-purple-700 hover:bg-purple-100 hover:text-purple-800 gap-2"
-                        onClick={() => handleNotify('kostnadsforslag')}
-                        disabled={(!ticket.customer_email && !ticket.customer_phone) || !canEdit}
-                      >
-                        <DollarSign size={16} /> Skicka kostnadsförslag
-                      </Button>
-                    </div>
+                    {hasSentCostProposal && !showUpdateProposal ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 p-2 bg-purple-50 border border-purple-200 rounded-lg">
+                          <DollarSign size={14} className="text-purple-600" />
+                          <span className="text-sm font-medium text-purple-800">{ticket.cost_proposal} kr</span>
+                          <span className="text-xs text-purple-500 ml-auto">Skickat</span>
+                        </div>
+                        {customerDecision && (
+                          <div className={`text-xs px-2 py-1 rounded border ${customerDecision.className}`}>
+                            {customerDecision.label}
+                          </div>
+                        )}
+                        {canEdit && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-purple-500/50 text-purple-700 hover:bg-purple-50 gap-2 w-full"
+                            onClick={() => setShowUpdateProposal(true)}
+                          >
+                            <DollarSign size={16} /> Uppdatera kostnadsförslag
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      <>
+                        <Input
+                          id={`cost-proposal-${ticket.id}`}
+                          value={costProposal}
+                          onChange={(e) => { markDirty('cost_proposal'); setCostProposal(e.target.value); }}
+                          onBlur={() => handleFieldUpdate('cost_proposal', costProposal)}
+                          placeholder="t.ex. 1299"
+                          className="bg-white"
+                          disabled={!canEdit}
+                        />
+                        {showUpdateProposal && ticket.cost_proposal !== costProposal && costProposal && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            Tidigare: {ticket.cost_proposal} kr → Nytt: {costProposal} kr
+                          </p>
+                        )}
+                        <div className="mt-3 flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-purple-500/50 bg-purple-50 text-purple-700 hover:bg-purple-100 hover:text-purple-800 gap-2"
+                            onClick={() => {
+                              handleNotify('kostnadsforslag');
+                              setShowUpdateProposal(false);
+                            }}
+                            disabled={(!ticket.customer_email && !ticket.customer_phone) || !canEdit}
+                          >
+                            <DollarSign size={16} />
+                            {hasSentCostProposal ? 'Skicka uppdaterat förslag' : 'Skicka kostnadsförslag'}
+                          </Button>
+                          {showUpdateProposal && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-gray-500"
+                              onClick={() => setShowUpdateProposal(false)}
+                            >
+                              Avbryt
+                            </Button>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
 
