@@ -269,10 +269,12 @@ router.get('/:id/messages', requireAuth, requireTenant, async (req, res) => {
     }
 
     const { rows } = await query(
-      `SELECT id, ticket_id, channel, direction, sender_user, to_number, from_number, subject, body, raw_body, parse_method, parse_confidence, message_id, in_reply_to, references_header, reply_token, provider, provider_id, created_at
-       FROM message_logs
-       WHERE ticket_id = $1
-       ORDER BY created_at DESC
+      `SELECT m.id, m.ticket_id, m.channel, m.direction, m.sender_user, m.to_number, m.from_number, m.subject, m.body, m.raw_body, m.parse_method, m.parse_confidence, m.message_id, m.in_reply_to, m.references_header, m.reply_token, m.provider, m.provider_id, m.created_at,
+              u.name AS sender_display_name
+       FROM message_logs m
+       LEFT JOIN users u ON u.email = m.sender_user AND u.tenant_id = m.tenant_id
+       WHERE m.ticket_id = $1
+       ORDER BY m.created_at DESC
        LIMIT 100`,
       [id]
     );

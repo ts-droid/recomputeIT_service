@@ -625,7 +625,7 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
                               : 'bg-white border-gray-200 text-gray-800 rounded-bl-md'
                           }`}>
                           <p className="font-semibold text-gray-700">
-                            {msg.direction === 'outbound' ? (msg.sender_user || import.meta.env.VITE_BRAND_NAME || 're:Compute-IT') : customerFirstName} · {channelLabel(msg.channel)}
+                            {msg.direction === 'outbound' ? (msg.sender_display_name || msg.sender_user || import.meta.env.VITE_BRAND_NAME || 're:Compute-IT') : customerFirstName} · {channelLabel(msg.channel)}
                           </p>
                           {msg.subject && <p className="text-gray-700 mt-1 break-words">{msg.subject}</p>}
                           {msg.body && <p className="text-gray-700 mt-1 break-words whitespace-pre-wrap">{cleanChatBody(msg.body) || msg.body}</p>}
@@ -636,7 +636,7 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
                           )}
                           <p className="text-gray-500 mt-2 text-[11px]">
                             {new Date(msg.created_at).toLocaleString('sv-SE')}
-                            {msg.sender_user ? ` · ${msg.sender_user}` : ''}
+                            {msg.sender_user ? ` · ${msg.sender_display_name || msg.sender_user}` : ''}
                           </p>
                           </div>
                         </button>

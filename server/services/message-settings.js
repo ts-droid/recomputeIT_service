@@ -2,24 +2,27 @@ import { query } from '../db.js';
 import { SUPPORTED_LANGUAGES } from '../lib/constants.js';
 import { translateIfNeeded } from './translation.js';
 
+export const getFirstName = (fullName = '') =>
+  String(fullName || '').trim().split(/\s+/)[0] || '';
+
 export const textTemplates = {
   costProposal: {
     sv: (ticket, amount) =>
-      `Hej ${ticket.customer_name}!\nÄrende #${ticket.ticket_number} (${ticket.device_type}${ticket.device_model ? ` ${ticket.device_model}` : ''}).\nDiagnos: ${ticket.diagnosis || 'Se bifogad information från butik.'}\nKostnadsförslag: ${amount} kr.\nSvara JA för godkännande eller NEJ för att avböja.`,
+      `Hej ${getFirstName(ticket.customer_name)}!\nÄrende #${ticket.ticket_number} (${ticket.device_type}${ticket.device_model ? ` ${ticket.device_model}` : ''}).\nDiagnos: ${ticket.diagnosis || 'Se bifogad information från butik.'}\nKostnadsförslag: ${amount} kr.\nSvara JA för godkännande eller NEJ för att avböja.`,
     en: (ticket, amount) =>
-      `Hi ${ticket.customer_name}!\nCase #${ticket.ticket_number} (${ticket.device_type}${ticket.device_model ? ` ${ticket.device_model}` : ''}).\nDiagnosis: ${ticket.diagnosis || 'See detailed info from the service desk.'}\nCost proposal: ${amount} SEK.\nReply YES to approve or NO to decline.`,
+      `Hi ${getFirstName(ticket.customer_name)}!\nCase #${ticket.ticket_number} (${ticket.device_type}${ticket.device_model ? ` ${ticket.device_model}` : ''}).\nDiagnosis: ${ticket.diagnosis || 'See detailed info from the service desk.'}\nCost proposal: ${amount} SEK.\nReply YES to approve or NO to decline.`,
   },
   costProposalUpdate: {
     sv: (ticket, amount) =>
-      `Hej ${ticket.customer_name}!\nÄrende #${ticket.ticket_number} (${ticket.device_type}${ticket.device_model ? ` ${ticket.device_model}` : ''}).\nVi har ett uppdaterat kostnadsförslag.\nDiagnos: ${ticket.diagnosis || 'Se bifogad information från butik.'}\nNytt kostnadsförslag: ${amount} kr.\nSvara JA för godkännande eller NEJ för att avböja.`,
+      `Hej ${getFirstName(ticket.customer_name)}!\nÄrende #${ticket.ticket_number} (${ticket.device_type}${ticket.device_model ? ` ${ticket.device_model}` : ''}).\nVi har ett uppdaterat kostnadsförslag.\nDiagnos: ${ticket.diagnosis || 'Se bifogad information från butik.'}\nNytt kostnadsförslag: ${amount} kr.\nSvara JA för godkännande eller NEJ för att avböja.`,
     en: (ticket, amount) =>
-      `Hi ${ticket.customer_name}!\nCase #${ticket.ticket_number} (${ticket.device_type}${ticket.device_model ? ` ${ticket.device_model}` : ''}).\nWe have an updated cost proposal.\nDiagnosis: ${ticket.diagnosis || 'See detailed info from the service desk.'}\nNew cost proposal: ${amount} SEK.\nReply YES to approve or NO to decline.`,
+      `Hi ${getFirstName(ticket.customer_name)}!\nCase #${ticket.ticket_number} (${ticket.device_type}${ticket.device_model ? ` ${ticket.device_model}` : ''}).\nWe have an updated cost proposal.\nDiagnosis: ${ticket.diagnosis || 'See detailed info from the service desk.'}\nNew cost proposal: ${amount} SEK.\nReply YES to approve or NO to decline.`,
   },
   repairReady: {
     sv: (ticket) =>
-      `Hej ${ticket.customer_name}!\nDin enhet för ärende #${ticket.ticket_number} är klar för upphämtning.\n${ticket.final_cost ? `Slutlig kostnad: ${ticket.final_cost} kr.\n` : ''}${ticket.work_done_summary ? `Utförda åtgärder: ${ticket.work_done_summary}\n` : ''}Välkommen in!`,
+      `Hej ${getFirstName(ticket.customer_name)}!\nDin enhet för ärende #${ticket.ticket_number} är klar för upphämtning.\n${ticket.final_cost ? `Slutlig kostnad: ${ticket.final_cost} kr.\n` : ''}${ticket.work_done_summary ? `Utförda åtgärder: ${ticket.work_done_summary}\n` : ''}Välkommen in!`,
     en: (ticket) =>
-      `Hi ${ticket.customer_name}!\nYour device for case #${ticket.ticket_number} is ready for pickup.\n${ticket.final_cost ? `Final cost: ${ticket.final_cost} SEK.\n` : ''}${ticket.work_done_summary ? `Work done: ${ticket.work_done_summary}\n` : ''}Welcome in!`,
+      `Hi ${getFirstName(ticket.customer_name)}!\nYour device for case #${ticket.ticket_number} is ready for pickup.\n${ticket.final_cost ? `Final cost: ${ticket.final_cost} SEK.\n` : ''}${ticket.work_done_summary ? `Work done: ${ticket.work_done_summary}\n` : ''}Welcome in!`,
   },
 };
 
@@ -27,31 +30,31 @@ export const emailTemplates = {
   costProposal: {
     sv: (ticket, amount) => ({
       subject: `Kostnadsförslag för ärende #${ticket.ticket_number}`,
-      body: `Hej ${ticket.customer_name},\n\nVi har tagit fram ett kostnadsförslag för ditt ärende (#${ticket.ticket_number}).\nKostnad: ${amount} kr.`,
+      body: `Hej ${getFirstName(ticket.customer_name)},\n\nVi har tagit fram ett kostnadsförslag för ditt ärende (#${ticket.ticket_number}).\nKostnad: ${amount} kr.`,
     }),
     en: (ticket, amount) => ({
       subject: `Cost proposal for case #${ticket.ticket_number}`,
-      body: `Hi ${ticket.customer_name},\n\nWe have prepared a cost proposal for your case (#${ticket.ticket_number}).\nCost: ${amount} SEK.`,
+      body: `Hi ${getFirstName(ticket.customer_name)},\n\nWe have prepared a cost proposal for your case (#${ticket.ticket_number}).\nCost: ${amount} SEK.`,
     }),
   },
   costProposalUpdate: {
     sv: (ticket, amount) => ({
       subject: `Uppdaterat kostnadsförslag för ärende #${ticket.ticket_number}`,
-      body: `Hej ${ticket.customer_name},\n\nVi har ett uppdaterat kostnadsförslag för ditt ärende (#${ticket.ticket_number}).\nNy kostnad: ${amount} kr.`,
+      body: `Hej ${getFirstName(ticket.customer_name)},\n\nVi har ett uppdaterat kostnadsförslag för ditt ärende (#${ticket.ticket_number}).\nNy kostnad: ${amount} kr.`,
     }),
     en: (ticket, amount) => ({
       subject: `Updated cost proposal for case #${ticket.ticket_number}`,
-      body: `Hi ${ticket.customer_name},\n\nWe have an updated cost proposal for your case (#${ticket.ticket_number}).\nNew cost: ${amount} SEK.`,
+      body: `Hi ${getFirstName(ticket.customer_name)},\n\nWe have an updated cost proposal for your case (#${ticket.ticket_number}).\nNew cost: ${amount} SEK.`,
     }),
   },
   repairReady: {
     sv: (ticket) => ({
       subject: `Din enhet är klar (#${ticket.ticket_number})`,
-      body: `Hej ${ticket.customer_name},\n\nDin enhet är klar för upphämtning. Välkommen in!`,
+      body: `Hej ${getFirstName(ticket.customer_name)},\n\nDin enhet är klar för upphämtning. Välkommen in!`,
     }),
     en: (ticket) => ({
       subject: `Your device is ready (#${ticket.ticket_number})`,
-      body: `Hi ${ticket.customer_name},\n\nYour device is ready for pickup. Welcome in!`,
+      body: `Hi ${getFirstName(ticket.customer_name)},\n\nYour device is ready for pickup. Welcome in!`,
     }),
   },
 };
@@ -110,8 +113,8 @@ export const DEFAULT_MESSAGE_SETTINGS = {
     en: 'Please confirm your response for case #{{ticket_number}}',
   },
   decision_unclear_email_body_by_lang: {
-    sv: 'Hej {{customer_name}},\n\nVi kunde inte tolka ditt senaste svar för ärende #{{ticket_number}}.\nSvara endast med JA för att godkänna kostnadsförslaget eller NEJ för att neka.\n\nTack!',
-    en: 'Hi {{customer_name}},\n\nWe could not interpret your latest response for case #{{ticket_number}}.\nPlease reply with YES to approve the quote or NO to decline.\n\nThank you!',
+    sv: 'Hej {{customer_first_name}},\n\nVi kunde inte tolka ditt senaste svar för ärende #{{ticket_number}}.\nSvara endast med JA för att godkänna kostnadsförslaget eller NEJ för att neka.\n\nTack!',
+    en: 'Hi {{customer_first_name}},\n\nWe could not interpret your latest response for case #{{ticket_number}}.\nPlease reply with YES to approve the quote or NO to decline.\n\nThank you!',
   },
   ai_reply_assistant_prompt:
     'Du hjälper servicepersonal att svara kunder kort, tydligt och professionellt. Föreslå ett konkret svar som kan skickas direkt.',

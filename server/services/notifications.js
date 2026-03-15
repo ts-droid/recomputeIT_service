@@ -3,7 +3,7 @@ import { DEEPSEEK_API_KEY, DEEPSEEK_MODEL, BRAND_NAME } from '../lib/constants.j
 import { sendSms } from './sms.js';
 import { sendEmail } from './email.js';
 import { translateIfNeeded, translateText } from './translation.js';
-import { getAdminMessageSettings, mergeMessageSettings, textTemplates, emailTemplates, DEFAULT_MESSAGE_SETTINGS } from './message-settings.js';
+import { getAdminMessageSettings, mergeMessageSettings, textTemplates, emailTemplates, DEFAULT_MESSAGE_SETTINGS, getFirstName } from './message-settings.js';
 import { getLanguage } from './phone.js';
 import { generateReplyToken, appendReplyGuidance, buildEmailHtml, escapeHtml, stripReplySystemLines } from './email-parsing.js';
 
@@ -118,6 +118,7 @@ const buildDecisionMessageTemplate = async ({ ticket, type, settings }) => {
   const activeSettings = mergeMessageSettings(settings || {});
   const variables = {
     customer_name: ticket.customer_name || '',
+    customer_first_name: getFirstName(ticket.customer_name),
     ticket_number: ticket.ticket_number || '',
     device_type: ticket.device_type || '',
     device_model: ticket.device_model || '',
@@ -250,6 +251,7 @@ const buildNotificationPreview = async ({ templateType, ticket, language, settin
   const smsFooter = await getLocalizedSetting(activeSettings.sms_footer_by_lang, language);
   const commonVariables = {
     customer_name: localizedTicket.customer_name || '',
+    customer_first_name: getFirstName(localizedTicket.customer_name),
     ticket_number: localizedTicket.ticket_number || '',
     device_type: localizedTicket.device_type || '',
     device_model: localizedTicket.device_model || '',
