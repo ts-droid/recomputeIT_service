@@ -159,7 +159,7 @@ router.post('/', requireAuth, requireTenant, async (req, res) => {
 // ---------------------------------------------------------------------------
 // PATCH /:id  (update ticket)
 // ---------------------------------------------------------------------------
-router.patch('/:id', requireAuth, requireRole('service'), requireTenant, async (req, res) => {
+router.patch('/:id', requireAuth, requireRole('base'), requireTenant, async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body || {};
@@ -307,7 +307,7 @@ router.get('/:id/messages', requireAuth, requireTenant, async (req, res) => {
 // ---------------------------------------------------------------------------
 // POST /:id/messages  (send message to customer)
 // ---------------------------------------------------------------------------
-router.post('/:id/messages', requireAuth, requireRole('service'), requireTenant, async (req, res) => {
+router.post('/:id/messages', requireAuth, requireRole('base'), requireTenant, async (req, res) => {
   try {
     const { id } = req.params;
     const { subject, body, message, text, channel = 'email' } = req.body || {};
@@ -381,7 +381,7 @@ router.post('/:id/messages', requireAuth, requireRole('service'), requireTenant,
 // ---------------------------------------------------------------------------
 // POST /:id/messages/ai-suggest
 // ---------------------------------------------------------------------------
-router.post('/:id/messages/ai-suggest', requireAuth, requireRole('service'), requireTenant, async (req, res) => {
+router.post('/:id/messages/ai-suggest', requireAuth, requireRole('base'), requireTenant, async (req, res) => {
   try {
     if (!DEEPSEEK_API_KEY) {
       return res.status(400).json({ error: 'DEEPSEEK_API_KEY saknas.' });
@@ -468,7 +468,7 @@ router.post('/:id/messages/ai-suggest', requireAuth, requireRole('service'), req
 // ---------------------------------------------------------------------------
 // POST /:id/actions/standardize
 // ---------------------------------------------------------------------------
-router.post('/:id/actions/standardize', requireAuth, requireRole('service'), requireTenant, async (req, res) => {
+router.post('/:id/actions/standardize', requireAuth, requireRole('base'), requireTenant, async (req, res) => {
   try {
     const { id } = req.params;
     const { planned_actions: plannedActions = '' } = req.body || {};
@@ -493,7 +493,7 @@ router.post('/:id/actions/standardize', requireAuth, requireRole('service'), req
 // ---------------------------------------------------------------------------
 // POST /:id/actions/translate
 // ---------------------------------------------------------------------------
-router.post('/:id/actions/translate', requireAuth, requireRole('service'), requireTenant, async (req, res) => {
+router.post('/:id/actions/translate', requireAuth, requireRole('base'), requireTenant, async (req, res) => {
   try {
     const { id } = req.params;
     const { text = '', language = 'sv' } = req.body || {};

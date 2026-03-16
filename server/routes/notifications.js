@@ -18,7 +18,7 @@ const router = Router();
 // ---------------------------------------------------------------------------
 // POST /preview-notification
 // ---------------------------------------------------------------------------
-router.post('/preview-notification', requireAuth, requireRole('service'), requireTenant, async (req, res) => {
+router.post('/preview-notification', requireAuth, requireRole('base'), requireTenant, async (req, res) => {
   try {
     const {
       ticketId,
@@ -147,7 +147,7 @@ const sendNotification = async ({ ticket, channel, message, translatedSubject, t
 // ---------------------------------------------------------------------------
 // POST /notify/cost-proposal
 // ---------------------------------------------------------------------------
-router.post('/notify/cost-proposal', requireAuth, requireRole('service'), requireTenant, async (req, res) => {
+router.post('/notify/cost-proposal', requireAuth, requireRole('base'), requireTenant, async (req, res) => {
   try {
     const { ticketId, channel, language: requestedLanguage, templateType: clientTemplateType } = req.body || {};
     const { rows } = await query('SELECT * FROM service_tickets WHERE id = $1 AND tenant_id = $2', [ticketId, req.tenantId]);
@@ -211,7 +211,7 @@ router.post('/notify/cost-proposal', requireAuth, requireRole('service'), requir
 // ---------------------------------------------------------------------------
 // POST /notify/repair-ready
 // ---------------------------------------------------------------------------
-router.post('/notify/repair-ready', requireAuth, requireRole('service'), requireTenant, async (req, res) => {
+router.post('/notify/repair-ready', requireAuth, requireRole('base'), requireTenant, async (req, res) => {
   try {
     const { ticketId, channel, language: requestedLanguage } = req.body || {};
     const { rows } = await query('SELECT * FROM service_tickets WHERE id = $1 AND tenant_id = $2', [ticketId, req.tenantId]);

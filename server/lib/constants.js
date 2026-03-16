@@ -41,9 +41,9 @@ export const DIRECTION = Object.freeze({
 // ---------------------------------------------------------------------------
 export const ROLE_RANK = Object.freeze({
   base: 1,
-  service: 2,
-  admin: 3,
-  superadmin: 4,
+  service: 1,   // legacy alias – treated the same as base
+  admin: 2,
+  superadmin: 3,
 });
 
 export const canAccess = (role, minimumRole) =>

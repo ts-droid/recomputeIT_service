@@ -110,7 +110,7 @@ const cleanChatBody = (body = '') => {
 
 export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
   const { role, token } = useSupabaseAuth();
-  const canEdit = role !== 'base';
+  const canEdit = Boolean(role); // all authenticated roles can edit tickets
   const [isOpen, setIsOpen] = useState(false);
   const [internalNotes, setInternalNotes] = useState('');
   const [plannedActions, setPlannedActions] = useState('');

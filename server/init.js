@@ -225,6 +225,9 @@ export async function initDb() {
   await query(`CREATE INDEX IF NOT EXISTS message_logs_provider_id_idx ON message_logs (provider, provider_id) WHERE provider_id IS NOT NULL`);
   await query(`CREATE INDEX IF NOT EXISTS message_logs_created_at_idx ON message_logs (created_at)`);
 
+  // 7b. Migrate legacy 'service' role to 'base'
+  await query(`UPDATE users SET role = 'base' WHERE role = 'service'`);
+
   // 8. Bootstrap admin user
   const adminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL;
   const adminPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD;

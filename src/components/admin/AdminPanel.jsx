@@ -96,7 +96,7 @@ export function AdminPanel() {
   });
   const [resettingUserId, setResettingUserId] = useState(null);
 
-  const canView = role === 'admin';
+  const canView = role === 'admin' || role === 'superadmin';
 
   const headers = useMemo(
     () => ({
@@ -734,7 +734,6 @@ export function AdminPanel() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="base">Bas</SelectItem>
-                      <SelectItem value="service">Service</SelectItem>
                       <SelectItem value="admin">Admin</SelectItem>
                     </SelectContent>
                   </Select>
@@ -779,7 +778,6 @@ export function AdminPanel() {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="base">Bas</SelectItem>
-                            <SelectItem value="service">Service</SelectItem>
                             <SelectItem value="admin">Admin</SelectItem>
                           </SelectContent>
                         </Select>
