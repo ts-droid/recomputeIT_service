@@ -105,7 +105,7 @@ export function ServiceRegister() {
   }
 
   const TableHeader = () => (
-    <div className="flex items-center p-4 bg-gray-50 rounded-t-lg font-semibold text-gray-600 text-sm">
+    <div className="hidden md:flex items-center p-4 bg-gray-50 rounded-t-lg font-semibold text-gray-600 text-sm">
       <div className="w-1/12"></div>
       <div className="w-2/12 flex items-center gap-2"><Hash size={14} />{t.register.columnTicketNo}</div>
       <div className="w-3/12 flex items-center gap-2"><User size={14} />{t.register.columnCustomer}</div>

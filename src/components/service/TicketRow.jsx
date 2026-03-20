@@ -621,29 +621,62 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets, onDelete, tenant
       exit={{ opacity: 0 }}
       className={`bg-white rounded-lg shadow-md border border-gray-200 mb-3 ${ticket.is_hidden ? 'opacity-60 bg-gray-50' : ''}`}
     >
-      <div 
-        className="flex items-center p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+      <div
+        className="flex items-center p-3 sm:p-4 cursor-pointer hover:bg-gray-50 transition-colors"
         onClick={() => setIsOpen(!isOpen)}
       >
-        <div className="w-1/12 text-gray-500">
-          {isOpen ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+        {/* Desktop row */}
+        <div className="hidden md:contents">
+          <div className="w-1/12 text-gray-500">
+            {isOpen ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+          </div>
+          <div className="w-2/12 font-semibold text-gray-800">#{ticket.ticket_number}</div>
+          <div className="w-3/12 text-gray-700">{ticket.customer_name}</div>
+          <div className="w-2/12 text-gray-600">{ticket.device_type}</div>
+          <div className="w-2/12 text-gray-500 text-sm truncate">
+            {ticket.assigned_to_name
+              ? String(ticket.assigned_to_name).trim().split(/\s+/)[0]
+              : <span className="text-gray-300 italic">Ej tilldelad</span>}
+          </div>
+          <div className="w-2/12 text-right flex items-center gap-2 justify-end">
+            {hasNewCustomerMessage && (
+              <Badge className="bg-blue-100 text-blue-800 border border-blue-200 font-medium">
+                <MessageSquare size={12} className="mr-1" />
+                Nytt meddelande
+              </Badge>
+            )}
+            <Badge className={`${statusStyles[ticket.status] || statusStyles['Nytt']} font-medium`}>{ticket.status}</Badge>
+          </div>
         </div>
-        <div className="w-2/12 font-semibold text-gray-800">#{ticket.ticket_number}</div>
-        <div className="w-3/12 text-gray-700">{ticket.customer_name}</div>
-        <div className="w-2/12 text-gray-600">{ticket.device_type}</div>
-        <div className="w-2/12 text-gray-500 text-sm truncate">
-          {ticket.assigned_to_name
-            ? String(ticket.assigned_to_name).trim().split(/\s+/)[0]
-            : <span className="text-gray-300 italic">Ej tilldelad</span>}
-        </div>
-        <div className="w-2/12 text-right flex items-center gap-2 justify-end">
-          {hasNewCustomerMessage && (
-            <Badge className="bg-blue-100 text-blue-800 border border-blue-200 font-medium">
-              <MessageSquare size={12} className="mr-1" />
-              Nytt meddelande
-            </Badge>
-          )}
-          <Badge className={`${statusStyles[ticket.status] || statusStyles['Nytt']} font-medium`}>{ticket.status}</Badge>
+        {/* Mobile card row */}
+        <div className="flex md:hidden items-center gap-3 w-full min-w-0">
+          <div className="text-gray-400 shrink-0">
+            {isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-0.5">
+              <span className="font-semibold text-gray-800 text-sm">#{ticket.ticket_number}</span>
+              <span className="text-gray-700 text-sm truncate">{ticket.customer_name}</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <span className="truncate">{ticket.device_type}</span>
+              {ticket.assigned_to_name && (
+                <>
+                  <span className="text-gray-300">·</span>
+                  <span className="truncate">{String(ticket.assigned_to_name).trim().split(/\s+/)[0]}</span>
+                </>
+              )}
+            </div>
+          </div>
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            <Badge className={`${statusStyles[ticket.status] || statusStyles['Nytt']} font-medium text-[10px] px-1.5 py-0.5`}>{ticket.status}</Badge>
+            {hasNewCustomerMessage && (
+              <Badge className="bg-blue-100 text-blue-800 border border-blue-200 font-medium text-[10px] px-1.5 py-0.5">
+                <MessageSquare size={10} className="mr-0.5" />
+                Nytt
+              </Badge>
+            )}
+          </div>
         </div>
       </div>
       <AnimatePresence>
@@ -654,7 +687,7 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets, onDelete, tenant
             exit={{ opacity: 0, height: 0 }}
             className="overflow-hidden"
           >
-            <div className="bg-gray-50/70 p-6 border-t border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="bg-gray-50/70 p-3 sm:p-6 border-t border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-8">
 
               <div className="md:col-span-2 space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1196,7 +1229,7 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets, onDelete, tenant
         )}
       </AnimatePresence>
       <Dialog open={!!selectedMessage} onOpenChange={(open) => !open && setSelectedMessage(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Meddelandedetaljer</DialogTitle>
           </DialogHeader>
@@ -1236,7 +1269,7 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets, onDelete, tenant
         </DialogContent>
       </Dialog>
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Redigera ärende #{ticket.ticket_number}</DialogTitle>
           </DialogHeader>
@@ -1248,7 +1281,7 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets, onDelete, tenant
                 onChange={(e) => setEditForm((prev) => ({ ...prev, customer_name: e.target.value }))}
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label className="text-sm font-medium">E-post</Label>
                 <Input
@@ -1292,7 +1325,7 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets, onDelete, tenant
                 className="min-h-[80px]"
               />
             </div>
-            <div className="flex justify-between pt-2">
+            <div className="flex flex-col sm:flex-row justify-between gap-3 pt-2">
               <Button onClick={handleSaveEdit} className="bg-blue-600 hover:bg-blue-700 text-white">
                 Spara ändringar
               </Button>

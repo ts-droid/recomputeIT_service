@@ -369,7 +369,7 @@ export function AdminPanel() {
       </div>
 
       <Tabs value={adminTab} onValueChange={setAdminTab} className="w-full">
-        <TabsList className="bg-gray-100">
+        <TabsList className="bg-gray-100 flex flex-wrap h-auto gap-1">
           <TabsTrigger value="reports">Rapporter</TabsTrigger>
           <TabsTrigger value="users">Användare</TabsTrigger>
           <TabsTrigger value="templates">Standardtexter</TabsTrigger>
@@ -378,7 +378,7 @@ export function AdminPanel() {
         </TabsList>
 
         <TabsContent value="reports" className="mt-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 mb-8">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 mb-8">
             <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
               <p className="text-sm text-gray-500">Totalt antal ärenden</p>
               <p className="text-2xl font-semibold text-gray-900">{stats?.total_tickets ?? '—'}</p>
@@ -801,7 +801,7 @@ export function AdminPanel() {
                           value={user.role}
                           onValueChange={(value) => updateUser(user.id, { role: value })}
                         >
-                          <SelectTrigger className="w-[140px] bg-white">
+                          <SelectTrigger className="w-full sm:w-[140px] bg-white">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>

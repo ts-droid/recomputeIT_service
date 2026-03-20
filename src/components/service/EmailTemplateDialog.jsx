@@ -230,7 +230,7 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-[calc(100%-1rem)] sm:max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {isCostProposalUpdate ? 'Uppdaterat kostnadsförslag' : isCostProposal ? 'Underlag för kostnadsförslag' : 'Meddelande till kund'}

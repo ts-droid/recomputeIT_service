@@ -132,23 +132,23 @@ const Header = ({ onSignOut, onOpenAccount, user, role, t }) => (
             <img className="h-10 w-auto" src="https://horizons-cdn.hostinger.com/66ce8f1a-1805-4a09-9f17-041a9f68d79f/f39487d84caba3a65608a9652e97d727.jpg" alt="re:Compute-IT Logo" />
           </Link>
         </div>
-        <div className="flex items-center gap-4">
-           {user && <p className="text-gray-500 text-sm hidden sm:block">{t.dashboard.loggedInAs} {user.email}</p>}
+        <div className="flex items-center gap-2 sm:gap-4">
+           {user && <p className="text-gray-500 text-sm hidden lg:block">{t.dashboard.loggedInAs} {user.email}</p>}
           <span className="text-[11px] text-gray-500 bg-white/80 border border-gray-200 rounded-full px-2 py-0.5 hidden sm:inline-flex">
             v{APP_VERSION}
           </span>
           {role === 'superadmin' && (
             <Link to="/superadmin">
-              <Button variant="outline" className="text-slate-600 hover:bg-slate-100 border-slate-300 gap-2">
-                <Shield size={16} /> Super Admin
+              <Button variant="outline" size="sm" className="text-slate-600 hover:bg-slate-100 border-slate-300 gap-1 sm:gap-2">
+                <Shield size={16} /> <span className="hidden sm:inline">Super Admin</span>
               </Button>
             </Link>
           )}
-          <Button onClick={onOpenAccount} variant="outline" className="text-gray-600 hover:bg-gray-100 border-gray-300 gap-2">
-            <Settings size={16} /> Mitt konto
+          <Button onClick={onOpenAccount} variant="outline" size="sm" className="text-gray-600 hover:bg-gray-100 border-gray-300 gap-1 sm:gap-2">
+            <Settings size={16} /> <span className="hidden sm:inline">Mitt konto</span>
           </Button>
-          <Button onClick={onSignOut} variant="outline" className="text-gray-600 hover:bg-gray-100 border-gray-300 gap-2">
-            <LogOut size={16} /> {t.dashboard.logout}
+          <Button onClick={onSignOut} variant="outline" size="sm" className="text-gray-600 hover:bg-gray-100 border-gray-300 gap-1 sm:gap-2">
+            <LogOut size={16} /> <span className="hidden sm:inline">{t.dashboard.logout}</span>
           </Button>
         </div>
       </div>
@@ -168,7 +168,7 @@ export default function DashboardPage() {
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex justify-between items-center mb-8"
+          className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8"
         >
           <div>
             <h1 className="text-3xl font-bold text-gray-900">
