@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, ChevronDown, ChevronRight, User, UserCircle, Smartphone, Mail, Phone, Calendar, Languages, Edit2, ShieldCheck, PenLine as FilePenLine, Wrench, DollarSign, Printer, Sparkles, EyeOff, Eye, MessageSquare, Send, Trash2 } from 'lucide-react';
+import { Loader2, ChevronDown, ChevronRight, User, UserCircle, Smartphone, Mail, Phone, Calendar, Languages, Edit2, ShieldCheck, PenLine as FilePenLine, Wrench, DollarSign, Printer, Sparkles, EyeOff, Eye, MessageSquare, Send, Trash2, CheckCircle2, Circle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -770,239 +770,418 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets, onDelete, tenant
 
               <div className="space-y-4">
                  <h3 className="font-semibold text-gray-800 flex items-center gap-2"><Edit2 size={16} />Hantering</h3>
-                 <div>
-                   <Label className="text-sm font-medium text-gray-700 flex items-center gap-2 mb-2">
-                     <UserCircle size={16} />
-                     Tilldelad tekniker
-                   </Label>
-                   <Select
-                     value={ticket.assigned_to || '_unassign'}
-                     onValueChange={handleAssignTechnician}
-                     disabled={!canEdit}
-                   >
-                     <SelectTrigger className="bg-white">
-                       <SelectValue placeholder="Välj tekniker" />
-                     </SelectTrigger>
-                     <SelectContent>
-                       <SelectItem value="_unassign">
-                         <span className="text-gray-400">Ej tilldelad</span>
-                       </SelectItem>
-                       {tenantUsers.map((u) => (
-                         <SelectItem key={u.id} value={u.id}>
-                           {u.name || u.email}
-                         </SelectItem>
-                       ))}
-                     </SelectContent>
-                   </Select>
-                 </div>
-                <div className="grid grid-cols-1 gap-4">
-                  <div>
-                    <Label htmlFor={`diagnosis-${ticket.id}`} className="text-sm font-medium text-gray-700 flex items-center gap-2 mb-2">
-                      <Wrench size={16} />
-                      Planerade åtgärder
-                    </Label>
-                    <Textarea
-                      id={`planned-actions-${ticket.id}`}
-                      value={plannedActions}
-                      onChange={(e) => { markDirty('planned_actions'); setPlannedActions(e.target.value); }}
-                      onBlur={() => handleFieldUpdate('planned_actions', plannedActions)}
-                      placeholder="Beskriv planerade åtgärder..."
-                      className="bg-white min-h-[100px]"
-                      disabled={!canEdit}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor={`cost-proposal-${ticket.id}`} className="text-sm font-medium text-gray-700 flex items-center gap-2 mb-2">
-                      <DollarSign size={16} />
-                      Kostnadsförslag (kr)
-                    </Label>
-                    {hasSentCostProposal && !showUpdateProposal ? (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 p-2 bg-purple-50 border border-purple-200 rounded-lg">
-                          <DollarSign size={14} className="text-purple-600" />
-                          <span className="text-sm font-medium text-purple-800">{ticket.cost_proposal} kr</span>
-                          <span className="text-xs text-purple-500 ml-auto">Skickat</span>
-                        </div>
-                        {customerDecision && (
-                          <div className={`text-xs px-2 py-1 rounded border ${customerDecision.className}`}>
-                            {customerDecision.label}
-                          </div>
-                        )}
-                        {canEdit && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="border-purple-500/50 text-purple-700 hover:bg-purple-50 gap-2 w-full"
-                            onClick={() => setShowUpdateProposal(true)}
-                          >
-                            <DollarSign size={16} /> Uppdatera kostnadsförslag
-                          </Button>
-                        )}
-                      </div>
-                    ) : (
-                      <>
-                        <Input
-                          id={`cost-proposal-${ticket.id}`}
-                          value={costProposal}
-                          onChange={(e) => { markDirty('cost_proposal'); setCostProposal(e.target.value); }}
-                          onBlur={() => handleFieldUpdate('cost_proposal', costProposal)}
-                          placeholder="t.ex. 1299"
-                          className="bg-white"
-                          disabled={!canEdit}
-                        />
-                        {showUpdateProposal && ticket.cost_proposal !== costProposal && costProposal && (
-                          <p className="text-xs text-gray-500 mt-1">
-                            Tidigare: {ticket.cost_proposal} kr → Nytt: {costProposal} kr
-                          </p>
-                        )}
-                        <div className="mt-3 flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="border-purple-500/50 bg-purple-50 text-purple-700 hover:bg-purple-100 hover:text-purple-800 gap-2"
-                            onClick={() => {
-                              handleNotify(hasSentCostProposal ? 'kostnadsforslag_uppdatering' : 'kostnadsforslag');
-                              setShowUpdateProposal(false);
-                            }}
-                            disabled={(!ticket.customer_email && !ticket.customer_phone) || !canEdit}
-                          >
-                            <DollarSign size={16} />
-                            {hasSentCostProposal ? 'Skicka uppdaterat förslag' : 'Skicka kostnadsförslag'}
-                          </Button>
-                          {showUpdateProposal && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-gray-500"
-                              onClick={() => setShowUpdateProposal(false)}
-                            >
-                              Avbryt
-                            </Button>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
 
-                <div className="pt-4 space-y-4">
-                   <div className={`p-3 rounded-lg transition-colors ${ticket.cost_proposal_approved ? 'bg-green-100 border-green-300' : 'bg-gray-100 border-gray-200'} border`}>
-                    <div className="flex items-center space-x-3">
-                      <Checkbox 
-                        id={`cost-approved-${ticket.id}`} 
-                        checked={!!ticket.cost_proposal_approved}
-                        onCheckedChange={handleApprovalChange}
-                        disabled={isApproving || isStandardizingActions || !canEdit}
-                        className="h-5 w-5"
-                      />
-                      <Label htmlFor={`cost-approved-${ticket.id}`} className={`text-base font-semibold flex items-center gap-2 cursor-pointer ${ticket.cost_proposal_approved ? 'text-green-800' : 'text-gray-700'}`}>
-                        {isApproving || isStandardizingActions ? <Loader2 size={18} className="animate-spin" /> : <ShieldCheck size={18} />}
-                        Kostnadsförslag godkänt
-                      </Label>
-                    </div>
-                  </div>
+                 {/* Step indicator */}
+                 {(() => {
+                   const currentStep =
+                     ticket.status === 'Avslutad' ? 5
+                     : ticket.status === 'Färdig' ? 4
+                     : ticket.status === 'Kostnadsförslag godkänt' ? 3
+                     : (hasSentCostProposal && !ticket.cost_proposal_approved) ? 2
+                     : 1;
+                   const stepLabels = ['Bedömning', 'Väntar på kundsvar', 'Arbete pågår', 'Klar för upphämtning', 'Avslutat'];
+                   const totalVisualSteps = 4;
+                   const displayStep = Math.min(currentStep, totalVisualSteps);
 
-                  <div className="grid grid-cols-1 gap-4">
-                     <div>
-                        <Label htmlFor={`work-done-${ticket.id}`} className="text-sm font-medium text-gray-700 flex items-center gap-2 mb-2">
-                           <Wrench size={16} />
-                           Utförda åtgärder
-                        </Label>
-                        <Textarea
-                          id={`work-done-${ticket.id}`}
-                          value={workDoneSummary}
-                          onChange={(e) => { markDirty('work_done_summary'); setWorkDoneSummary(e.target.value); }}
-                          onBlur={() => handleFieldUpdate('work_done_summary', workDoneSummary)}
-                          placeholder="Beskriv vad som har gjorts..."
-                          className="bg-white min-h-[100px]"
-                          disabled={!canEdit}
-                        />
-                      </div>
+                   return (
+                     <>
+                       {/* Step progress indicator */}
+                       <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2">
+                         <div className="flex items-center justify-between">
+                           <span className="text-sm font-medium text-gray-700">
+                             {currentStep <= totalVisualSteps
+                               ? `Steg ${displayStep} av ${totalVisualSteps}`
+                               : 'Avslutat'}{' '}
+                             — {stepLabels[currentStep - 1]}
+                           </span>
+                         </div>
+                         <div className="flex gap-1">
+                           {[1, 2, 3, 4].map((s) => (
+                             <div
+                               key={s}
+                               className={`h-1.5 flex-1 rounded-full transition-colors ${
+                                 s < currentStep ? 'bg-green-500'
+                                 : s === currentStep ? 'bg-purple-500'
+                                 : 'bg-gray-200'
+                               }`}
+                             />
+                           ))}
+                         </div>
+                         <div className="flex gap-1 justify-between">
+                           {[1, 2, 3, 4].map((s) => (
+                             <div key={s} className="flex items-center gap-1">
+                               {s < currentStep ? (
+                                 <CheckCircle2 size={12} className="text-green-500" />
+                               ) : s === currentStep ? (
+                                 <Circle size={12} className="text-purple-500 fill-purple-500" />
+                               ) : (
+                                 <Circle size={12} className="text-gray-300" />
+                               )}
+                               <span className={`text-[10px] ${
+                                 s < currentStep ? 'text-green-600'
+                                 : s === currentStep ? 'text-purple-600 font-medium'
+                                 : 'text-gray-400'
+                               }`}>
+                                 {stepLabels[s - 1]}
+                               </span>
+                             </div>
+                           ))}
+                         </div>
+                       </div>
+
+                       {/* Technician assignment — always visible */}
                        <div>
-                        <Label htmlFor={`final-cost-${ticket.id}`} className="text-sm font-medium text-gray-700 flex items-center gap-2 mb-2">
-                           <DollarSign size={16} />
-                           Slutlig kostnad (kr)
-                        </Label>
-                       <Input
-                          id={`final-cost-${ticket.id}`}
-                          value={finalCost}
-                          onChange={(e) => { markDirty('final_cost'); setFinalCost(e.target.value); }}
-                          onBlur={() => handleFieldUpdate('final_cost', finalCost)}
-                          placeholder="t.ex. 1299"
-                          className="bg-white"
-                          disabled={!canEdit}
-                        />
-                        <div className="mt-3">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="border-blue-500/50 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 gap-2"
-                            onClick={() => handleNotify('reparationFardig')}
-                            disabled={(!ticket.customer_email && !ticket.customer_phone) || !canEdit}
-                          >
-                            <Mail size={16} /> Meddela att reparation är klar
-                          </Button>
-                        </div>
-                      </div>
-                  </div>
+                         <Label className="text-sm font-medium text-gray-700 flex items-center gap-2 mb-2">
+                           <UserCircle size={16} />
+                           Tilldelad tekniker
+                         </Label>
+                         <Select
+                           value={ticket.assigned_to || '_unassign'}
+                           onValueChange={handleAssignTechnician}
+                           disabled={!canEdit}
+                         >
+                           <SelectTrigger className="bg-white">
+                             <SelectValue placeholder="Välj tekniker" />
+                           </SelectTrigger>
+                           <SelectContent>
+                             <SelectItem value="_unassign">
+                               <span className="text-gray-400">Ej tilldelad</span>
+                             </SelectItem>
+                             {tenantUsers.map((u) => (
+                               <SelectItem key={u.id} value={u.id}>
+                                 {u.name || u.email}
+                               </SelectItem>
+                             ))}
+                           </SelectContent>
+                         </Select>
+                       </div>
 
-                  <div>
-                    <Label htmlFor={`internal-notes-${ticket.id}`} className="text-sm font-medium text-gray-700 flex items-center gap-2 mb-2">
-                       <FilePenLine size={16} />
-                       Interna anteckningar
-                    </Label>
-                    <Textarea
-                      id={`internal-notes-${ticket.id}`}
-                      value={internalNotes}
-                      onChange={(e) => { markDirty('internal_notes'); setInternalNotes(e.target.value); }}
-                      onBlur={() => handleFieldUpdate('internal_notes', internalNotes)}
-                      placeholder="Anteckningar endast för personal..."
-                      className="bg-white min-h-[100px]"
-                      disabled={!canEdit}
-                    />
-                  </div>
+                       {/* ===== STEP 1: Bedömning ===== */}
+                       {currentStep === 1 && (
+                         <div className="space-y-4">
+                           <div>
+                             <Label htmlFor={`planned-actions-${ticket.id}`} className="text-sm font-medium text-gray-700 flex items-center gap-2 mb-2">
+                               <Wrench size={16} />
+                               Planerade åtgärder
+                             </Label>
+                             <Textarea
+                               id={`planned-actions-${ticket.id}`}
+                               value={plannedActions}
+                               onChange={(e) => { markDirty('planned_actions'); setPlannedActions(e.target.value); }}
+                               onBlur={() => handleFieldUpdate('planned_actions', plannedActions)}
+                               placeholder="Beskriv planerade åtgärder..."
+                               className="bg-white min-h-[100px]"
+                               disabled={!canEdit}
+                             />
+                           </div>
+                           <div>
+                             <Label htmlFor={`cost-proposal-${ticket.id}`} className="text-sm font-medium text-gray-700 flex items-center gap-2 mb-2">
+                               <DollarSign size={16} />
+                               Kostnadsförslag (kr)
+                             </Label>
+                             <Input
+                               id={`cost-proposal-${ticket.id}`}
+                               value={costProposal}
+                               onChange={(e) => { markDirty('cost_proposal'); setCostProposal(e.target.value); }}
+                               onBlur={() => handleFieldUpdate('cost_proposal', costProposal)}
+                               placeholder="t.ex. 1299"
+                               className="bg-white"
+                               disabled={!canEdit}
+                             />
+                           </div>
+                           <Button
+                             className="w-full bg-purple-600 hover:bg-purple-700 text-white gap-2"
+                             onClick={() => handleNotify('kostnadsforslag')}
+                             disabled={(!ticket.customer_email && !ticket.customer_phone) || !canEdit}
+                           >
+                             <DollarSign size={16} />
+                             Skicka kostnadsförslag till kund
+                           </Button>
+                         </div>
+                       )}
 
-                  <div className="border-t border-gray-200 pt-4 mt-4 space-y-3">
-                    <Button 
-                      onClick={handleFinalizeTicket} 
-                      disabled={isProcessing || ticket.status === 'Avslutad' || !canEdit}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                    >
-                      {isProcessing ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Printer size={16} className="mr-2" />}
-                      {ticket.status === 'Avslutad' ? 'Ärende Avslutat' : 'Lämna ut & Skriv ut kvitto'}
-                    </Button>
-                    <p className="text-xs text-center text-gray-500 mt-2 flex items-center justify-center gap-1">
-                      <Sparkles size={12} className="text-purple-500" /> Skapar ett tydligt kvitto för kunden.
-                    </p>
-                    {canCloseWithoutAction && ticket.status !== 'Avslutad' && (
-                      <Button
-                        onClick={handleCloseWithoutAction}
-                        disabled={isProcessing || !canEdit}
-                        className="w-full bg-red-600 hover:bg-red-700 text-white"
-                      >
-                        Avsluta utan åtgärd
-                      </Button>
-                    )}
-                    <div className="flex gap-3">
-                      <Button 
-                        onClick={handleReprint} 
-                        variant="outline"
-                        className="w-full"
-                      >
-                        <Printer size={16} className="mr-2" /> Skriv ut igen
-                      </Button>
-                      <Button 
-                        onClick={handleToggleHidden} 
-                        variant="outline"
-                        className="w-full"
-                        disabled={!canEdit}
-                      >
-                        {ticket.is_hidden ? <Eye size={16} className="mr-2" /> : <EyeOff size={16} className="mr-2" />}
-                        {ticket.is_hidden ? 'Visa' : 'Dölj'}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
+                       {/* ===== STEP 2: Väntar på kundsvar ===== */}
+                       {currentStep === 2 && (
+                         <div className="space-y-4">
+                           {/* Sent cost proposal card */}
+                           <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg space-y-2">
+                             <div className="flex items-center gap-2">
+                               <DollarSign size={14} className="text-purple-600" />
+                               <span className="text-sm font-semibold text-purple-800">{ticket.cost_proposal} kr</span>
+                               <Badge className="ml-auto bg-purple-100 text-purple-700 border-purple-300 text-xs">Skickat</Badge>
+                             </div>
+                           </div>
+
+                           {/* Customer decision */}
+                           {customerDecision && (
+                             <div className={`text-sm px-3 py-2 rounded-lg border font-medium ${customerDecision.className}`}>
+                               Kundens svar: {customerDecision.label}
+                             </div>
+                           )}
+                           {!customerDecision && (
+                             <div className="text-sm px-3 py-2 rounded-lg border border-orange-200 bg-orange-50 text-orange-700 font-medium">
+                               Kundens svar: Väntar...
+                             </div>
+                           )}
+
+                           {/* Update proposal */}
+                           {!showUpdateProposal ? (
+                             <Button
+                               size="sm"
+                               variant="outline"
+                               className="border-purple-500/50 text-purple-700 hover:bg-purple-50 gap-2 w-full"
+                               onClick={() => setShowUpdateProposal(true)}
+                               disabled={!canEdit}
+                             >
+                               <DollarSign size={16} /> Uppdatera kostnadsförslag
+                             </Button>
+                           ) : (
+                             <div className="space-y-2">
+                               <Input
+                                 id={`cost-proposal-${ticket.id}`}
+                                 value={costProposal}
+                                 onChange={(e) => { markDirty('cost_proposal'); setCostProposal(e.target.value); }}
+                                 onBlur={() => handleFieldUpdate('cost_proposal', costProposal)}
+                                 placeholder="t.ex. 1299"
+                                 className="bg-white"
+                                 disabled={!canEdit}
+                               />
+                               {ticket.cost_proposal !== costProposal && costProposal && (
+                                 <p className="text-xs text-gray-500">
+                                   Tidigare: {ticket.cost_proposal} kr → Nytt: {costProposal} kr
+                                 </p>
+                               )}
+                               <div className="flex gap-2">
+                                 <Button
+                                   size="sm"
+                                   variant="outline"
+                                   className="border-purple-500/50 bg-purple-50 text-purple-700 hover:bg-purple-100 hover:text-purple-800 gap-2"
+                                   onClick={() => {
+                                     handleNotify('kostnadsforslag_uppdatering');
+                                     setShowUpdateProposal(false);
+                                   }}
+                                   disabled={(!ticket.customer_email && !ticket.customer_phone) || !canEdit}
+                                 >
+                                   <DollarSign size={16} /> Skicka uppdaterat förslag
+                                 </Button>
+                                 <Button
+                                   size="sm"
+                                   variant="ghost"
+                                   className="text-gray-500"
+                                   onClick={() => setShowUpdateProposal(false)}
+                                 >
+                                   Avbryt
+                                 </Button>
+                               </div>
+                             </div>
+                           )}
+
+                           {/* Close without action if denied */}
+                           {canCloseWithoutAction && (
+                             <Button
+                               onClick={handleCloseWithoutAction}
+                               disabled={isProcessing || !canEdit}
+                               className="w-full bg-red-600 hover:bg-red-700 text-white"
+                             >
+                               Avsluta utan åtgärd
+                             </Button>
+                           )}
+                         </div>
+                       )}
+
+                       {/* ===== STEP 3: Arbete pågår ===== */}
+                       {currentStep === 3 && (
+                         <div className="space-y-4">
+                           {/* Approved cost proposal card */}
+                           <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                             <div className="flex items-center gap-2">
+                               <CheckCircle2 size={14} className="text-green-600" />
+                               <span className="text-sm font-semibold text-green-800">Godkänt kostnadsförslag: {ticket.cost_proposal} kr</span>
+                             </div>
+                           </div>
+
+                           <div>
+                             <Label htmlFor={`work-done-${ticket.id}`} className="text-sm font-medium text-gray-700 flex items-center gap-2 mb-2">
+                               <Wrench size={16} />
+                               Utförda åtgärder
+                             </Label>
+                             <Textarea
+                               id={`work-done-${ticket.id}`}
+                               value={workDoneSummary}
+                               onChange={(e) => { markDirty('work_done_summary'); setWorkDoneSummary(e.target.value); }}
+                               onBlur={() => handleFieldUpdate('work_done_summary', workDoneSummary)}
+                               placeholder="Beskriv vad som har gjorts..."
+                               className="bg-white min-h-[100px]"
+                               disabled={!canEdit}
+                             />
+                           </div>
+                           <div>
+                             <Label htmlFor={`final-cost-${ticket.id}`} className="text-sm font-medium text-gray-700 flex items-center gap-2 mb-2">
+                               <DollarSign size={16} />
+                               Slutlig kostnad (kr)
+                             </Label>
+                             <Input
+                               id={`final-cost-${ticket.id}`}
+                               value={finalCost}
+                               onChange={(e) => { markDirty('final_cost'); setFinalCost(e.target.value); }}
+                               onBlur={() => handleFieldUpdate('final_cost', finalCost)}
+                               placeholder="t.ex. 1299"
+                               className="bg-white"
+                               disabled={!canEdit}
+                             />
+                           </div>
+                           <Button
+                             className="w-full bg-blue-600 hover:bg-blue-700 text-white gap-2"
+                             onClick={() => handleNotify('reparationFardig')}
+                             disabled={(!ticket.customer_email && !ticket.customer_phone) || !canEdit}
+                           >
+                             <Mail size={16} />
+                             Meddela att reparation är klar
+                           </Button>
+                         </div>
+                       )}
+
+                       {/* ===== STEP 4: Klar för upphämtning ===== */}
+                       {currentStep === 4 && (
+                         <div className="space-y-4">
+                           {/* Summary */}
+                           <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg space-y-2">
+                             <div className="text-sm text-gray-700">
+                               <span className="font-medium">Utförda åtgärder:</span>{' '}
+                               {ticket.work_done_summary || <span className="text-gray-400 italic">Ej angivet</span>}
+                             </div>
+                             <div className="text-sm text-gray-700">
+                               <span className="font-medium">Slutlig kostnad:</span>{' '}
+                               {ticket.final_cost ? `${ticket.final_cost} kr` : <span className="text-gray-400 italic">Ej angivet</span>}
+                             </div>
+                           </div>
+
+                           <div>
+                             <Label htmlFor={`work-done-${ticket.id}`} className="text-sm font-medium text-gray-700 flex items-center gap-2 mb-2">
+                               <Wrench size={16} />
+                               Utförda åtgärder
+                             </Label>
+                             <Textarea
+                               id={`work-done-${ticket.id}`}
+                               value={workDoneSummary}
+                               onChange={(e) => { markDirty('work_done_summary'); setWorkDoneSummary(e.target.value); }}
+                               onBlur={() => handleFieldUpdate('work_done_summary', workDoneSummary)}
+                               placeholder="Beskriv vad som har gjorts..."
+                               className="bg-white min-h-[100px]"
+                               disabled={!canEdit}
+                             />
+                           </div>
+                           <div>
+                             <Label htmlFor={`final-cost-${ticket.id}`} className="text-sm font-medium text-gray-700 flex items-center gap-2 mb-2">
+                               <DollarSign size={16} />
+                               Slutlig kostnad (kr)
+                             </Label>
+                             <Input
+                               id={`final-cost-${ticket.id}`}
+                               value={finalCost}
+                               onChange={(e) => { markDirty('final_cost'); setFinalCost(e.target.value); }}
+                               onBlur={() => handleFieldUpdate('final_cost', finalCost)}
+                               placeholder="t.ex. 1299"
+                               className="bg-white"
+                               disabled={!canEdit}
+                             />
+                           </div>
+
+                           <Button
+                             onClick={handleFinalizeTicket}
+                             disabled={isProcessing || !canEdit}
+                             className="w-full bg-blue-600 hover:bg-blue-700 text-white gap-2"
+                           >
+                             {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <Printer size={16} />}
+                             Lämna ut & Skriv ut kvitto
+                           </Button>
+                           <p className="text-xs text-center text-gray-500 flex items-center justify-center gap-1">
+                             <Sparkles size={12} className="text-purple-500" /> Skapar ett tydligt kvitto för kunden.
+                           </p>
+
+                           <div className="flex gap-3">
+                             <Button
+                               onClick={handleReprint}
+                               variant="outline"
+                               className="w-full"
+                             >
+                               <Printer size={16} className="mr-2" /> Skriv ut igen
+                             </Button>
+                             <Button
+                               onClick={handleToggleHidden}
+                               variant="outline"
+                               className="w-full"
+                               disabled={!canEdit}
+                             >
+                               {ticket.is_hidden ? <Eye size={16} className="mr-2" /> : <EyeOff size={16} className="mr-2" />}
+                               {ticket.is_hidden ? 'Visa' : 'Dölj'}
+                             </Button>
+                           </div>
+                         </div>
+                       )}
+
+                       {/* ===== STEP 5: Avslutat ===== */}
+                       {currentStep === 5 && (
+                         <div className="space-y-4">
+                           {/* Green completed banner */}
+                           <div className="p-3 bg-green-50 border border-green-300 rounded-lg flex items-center gap-2">
+                             <CheckCircle2 size={18} className="text-green-600" />
+                             <span className="text-sm font-semibold text-green-800">Ärende avslutat</span>
+                           </div>
+
+                           {/* Read-only summary */}
+                           <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg space-y-2">
+                             <div className="text-sm text-gray-700">
+                               <span className="font-medium">Utförda åtgärder:</span>{' '}
+                               {ticket.work_done_summary || <span className="text-gray-400 italic">Ej angivet</span>}
+                             </div>
+                             <div className="text-sm text-gray-700">
+                               <span className="font-medium">Slutlig kostnad:</span>{' '}
+                               {ticket.final_cost ? `${ticket.final_cost} kr` : <span className="text-gray-400 italic">Ej angivet</span>}
+                             </div>
+                           </div>
+
+                           <div className="flex gap-3">
+                             <Button
+                               onClick={handleReprint}
+                               variant="outline"
+                               className="w-full"
+                             >
+                               <Printer size={16} className="mr-2" /> Skriv ut igen
+                             </Button>
+                             <Button
+                               onClick={handleToggleHidden}
+                               variant="outline"
+                               className="w-full"
+                               disabled={!canEdit}
+                             >
+                               {ticket.is_hidden ? <Eye size={16} className="mr-2" /> : <EyeOff size={16} className="mr-2" />}
+                               {ticket.is_hidden ? 'Visa' : 'Dölj'}
+                             </Button>
+                           </div>
+                         </div>
+                       )}
+
+                       {/* Internal notes — always visible */}
+                       <div>
+                         <Label htmlFor={`internal-notes-${ticket.id}`} className="text-sm font-medium text-gray-700 flex items-center gap-2 mb-2">
+                           <FilePenLine size={16} />
+                           Interna anteckningar
+                         </Label>
+                         <Textarea
+                           id={`internal-notes-${ticket.id}`}
+                           value={internalNotes}
+                           onChange={(e) => { markDirty('internal_notes'); setInternalNotes(e.target.value); }}
+                           onBlur={() => handleFieldUpdate('internal_notes', internalNotes)}
+                           placeholder="Anteckningar endast för personal..."
+                           className="bg-white min-h-[100px]"
+                           disabled={!canEdit}
+                         />
+                       </div>
+                     </>
+                   );
+                 })()}
+
                 <EmailTemplateDialog
                   open={isDialogOpen}
                   onOpenChange={setIsDialogOpen}
