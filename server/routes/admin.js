@@ -185,7 +185,25 @@ router.get('/stats', requireAuth, requireRole('admin'), requireTenant, async (re
       values
     );
 
-    res.json(rows[0]);
+    // Per-technician breakdown
+    const { rows: techRows } = await query(
+      `
+      SELECT
+        assigned_to,
+        assigned_to_name,
+        COUNT(*)::int AS total_tickets,
+        COUNT(*) FILTER (WHERE status = 'Avslutad')::int AS closed_tickets,
+        AVG(EXTRACT(EPOCH FROM (completed_at - created_at))) AS avg_repair_seconds
+      FROM service_tickets
+      ${whereClause}
+        AND assigned_to IS NOT NULL
+      GROUP BY assigned_to, assigned_to_name
+      ORDER BY total_tickets DESC
+      `,
+      values
+    );
+
+    res.json({ ...rows[0], technician_stats: techRows });
   } catch (error) {
     console.error('GET /api/admin/stats error:', error);
     res.status(500).json({ error: 'Kunde inte hämta statistik.' });

@@ -152,5 +152,26 @@ export const useServiceTickets = () => {
     }
   }, [toast, token]);
   
-  return { tickets, addTicket, loading: loading || authLoading, refreshTickets: silentRefresh, updateTicket };
+  const deleteTicket = useCallback(async (ticketId) => {
+    try {
+      await apiFetch(`/api/tickets/${ticketId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      setTickets((prev) => prev.filter((t) => t.id !== ticketId));
+      toast({ title: 'Ärende borttaget', description: 'Ärendet har tagits bort.' });
+      return true;
+    } catch (error) {
+      console.error('Error deleting ticket:', error);
+      toast({
+        title: 'Kunde inte ta bort ärende',
+        description: error?.message || 'Försök igen.',
+        variant: 'destructive',
+      });
+      return false;
+    }
+  }, [toast, token]);
+
+  return { tickets, addTicket, loading: loading || authLoading, refreshTickets: silentRefresh, updateTicket, deleteTicket };
 };

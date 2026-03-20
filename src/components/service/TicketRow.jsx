@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, ChevronDown, ChevronRight, User, Smartphone, Mail, Phone, Calendar, Languages, Edit2, ShieldCheck, PenLine as FilePenLine, Wrench, DollarSign, Printer, Sparkles, EyeOff, Eye, MessageSquare, Send } from 'lucide-react';
+import { Loader2, ChevronDown, ChevronRight, User, UserCircle, Smartphone, Mail, Phone, Calendar, Languages, Edit2, ShieldCheck, PenLine as FilePenLine, Wrench, DollarSign, Printer, Sparkles, EyeOff, Eye, MessageSquare, Send, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -108,8 +109,9 @@ const cleanChatBody = (body = '') => {
   return cleaned.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 };
 
-export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
-  const { role, token } = useSupabaseAuth();
+export const TicketRow = ({ ticket, onUpdate, onRefreshTickets, onDelete, tenantUsers = [] }) => {
+  const { role, token, user: currentUser } = useSupabaseAuth();
+  const canDelete = role === 'admin' || role === 'superadmin';
   const canEdit = Boolean(role); // all authenticated roles can edit tickets
   const [isOpen, setIsOpen] = useState(false);
   const [internalNotes, setInternalNotes] = useState('');
@@ -315,10 +317,20 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
   const markDirty = (field) => dirtyFieldsRef.current.add(field);
   const clearDirty = (field) => dirtyFieldsRef.current.delete(field);
 
+  const autoAssignIfNeeded = useCallback((updates = {}) => {
+    if (!ticket.assigned_to && currentUser?.id) {
+      const me = tenantUsers.find((u) => u.id === currentUser.id);
+      updates.assigned_to = currentUser.id;
+      updates.assigned_to_name = me?.name || currentUser.name || currentUser.email || '';
+    }
+    return updates;
+  }, [ticket.assigned_to, currentUser, tenantUsers]);
+
   const handleFieldUpdate = (field, value) => {
     clearDirty(field);
     if (ticket[field] !== value) {
-      onUpdate(ticket.id, { [field]: value });
+      const updates = autoAssignIfNeeded({ [field]: value });
+      onUpdate(ticket.id, updates);
       let title = '';
       if(field === 'internal_notes') title = 'Anteckningar sparade';
       if(field === 'work_done_summary') title = 'Åtgärder sparade';
@@ -328,6 +340,18 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
         toast({ title: title, description: `Ärende #${ticket.ticket_number} har uppdaterats.` });
       }
     }
+  };
+
+  const handleAssignTechnician = (userId) => {
+    if (userId === '_unassign') {
+      onUpdate(ticket.id, { assigned_to: null, assigned_to_name: null });
+      toast({ title: 'Tilldelning borttagen', description: `Ärende #${ticket.ticket_number} har ingen tilldelad tekniker.` });
+      return;
+    }
+    const selectedUser = tenantUsers.find((u) => u.id === userId);
+    if (!selectedUser) return;
+    onUpdate(ticket.id, { assigned_to: userId, assigned_to_name: selectedUser.name || selectedUser.email });
+    toast({ title: 'Tekniker tilldelad', description: `${selectedUser.name || selectedUser.email} tilldelad ärende #${ticket.ticket_number}.` });
   };
 
   const standardizePlannedActions = async (text) => {
@@ -539,7 +563,50 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
       description: `Ärende #${ticket.ticket_number} är nu ${newHiddenState ? 'dolt' : 'synligt'} i listan.`,
     });
   };
-  
+
+  // --- Edit ticket dialog ---
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState({});
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const openEditDialog = () => {
+    setEditForm({
+      customer_name: ticket.customer_name || '',
+      customer_email: ticket.customer_email || '',
+      customer_phone: ticket.customer_phone || '',
+      preferred_contact_channel: ticket.preferred_contact_channel || '',
+      device_model: ticket.device_model || '',
+      additional_notes: ticket.additional_notes || '',
+    });
+    setConfirmDelete(false);
+    setIsEditOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    const changed = {};
+    for (const [key, value] of Object.entries(editForm)) {
+      if ((ticket[key] || '') !== value) {
+        changed[key] = value || null;
+      }
+    }
+    if (Object.keys(changed).length > 0) {
+      await onUpdate(ticket.id, changed);
+      toast({ title: 'Ärende uppdaterat', description: `Ärende #${ticket.ticket_number} har uppdaterats.` });
+    }
+    setIsEditOpen(false);
+  };
+
+  const handleDeleteTicket = async () => {
+    if (!onDelete) return;
+    setIsDeleting(true);
+    const ok = await onDelete(ticket.id);
+    setIsDeleting(false);
+    if (ok) {
+      setIsEditOpen(false);
+    }
+  };
+
   return (
     <motion.div
       layout
@@ -557,8 +624,13 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
         </div>
         <div className="w-2/12 font-semibold text-gray-800">#{ticket.ticket_number}</div>
         <div className="w-3/12 text-gray-700">{ticket.customer_name}</div>
-        <div className="w-3/12 text-gray-600">{ticket.device_type}</div>
-        <div className="w-3/12 text-right flex items-center gap-2 justify-end">
+        <div className="w-2/12 text-gray-600">{ticket.device_type}</div>
+        <div className="w-2/12 text-gray-500 text-sm truncate">
+          {ticket.assigned_to_name
+            ? String(ticket.assigned_to_name).trim().split(/\s+/)[0]
+            : <span className="text-gray-300 italic">Ej tilldelad</span>}
+        </div>
+        <div className="w-2/12 text-right flex items-center gap-2 justify-end">
           {hasNewCustomerMessage && (
             <Badge className="bg-blue-100 text-blue-800 border border-blue-200 font-medium">
               <MessageSquare size={12} className="mr-1" />
@@ -581,7 +653,14 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
               <div className="md:col-span-2 space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-2">
-                    <h3 className="font-semibold text-gray-800 flex items-center gap-2"><User size={16} />Kundinformation</h3>
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold text-gray-800 flex items-center gap-2"><User size={16} />Kundinformation</h3>
+                      {canEdit && (
+                        <Button size="sm" variant="ghost" className="h-7 px-2 text-gray-500 hover:text-gray-700" onClick={openEditDialog}>
+                          <Edit2 size={14} className="mr-1" /> Redigera
+                        </Button>
+                      )}
+                    </div>
                     <p className="text-sm text-gray-600 flex items-center gap-2"><Mail size={14} /> {ticket.customer_email || 'Ej angiven'}</p>
                     <p className="text-sm text-gray-600 flex items-center gap-2"><Phone size={14} /> {ticket.customer_phone || 'Ej angiven'}</p>
                     <p className="text-sm text-gray-600">
@@ -685,6 +764,31 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
 
               <div className="space-y-4">
                  <h3 className="font-semibold text-gray-800 flex items-center gap-2"><Edit2 size={16} />Hantering</h3>
+                 <div>
+                   <Label className="text-sm font-medium text-gray-700 flex items-center gap-2 mb-2">
+                     <UserCircle size={16} />
+                     Tilldelad tekniker
+                   </Label>
+                   <Select
+                     value={ticket.assigned_to || '_unassign'}
+                     onValueChange={handleAssignTechnician}
+                     disabled={!canEdit}
+                   >
+                     <SelectTrigger className="bg-white">
+                       <SelectValue placeholder="Välj tekniker" />
+                     </SelectTrigger>
+                     <SelectContent>
+                       <SelectItem value="_unassign">
+                         <span className="text-gray-400">Ej tilldelad</span>
+                       </SelectItem>
+                       {tenantUsers.map((u) => (
+                         <SelectItem key={u.id} value={u.id}>
+                           {u.name || u.email}
+                         </SelectItem>
+                       ))}
+                     </SelectContent>
+                   </Select>
+                 </div>
                 <div className="grid grid-cols-1 gap-4">
                   <div>
                     <Label htmlFor={`diagnosis-${ticket.id}`} className="text-sm font-medium text-gray-700 flex items-center gap-2 mb-2">
@@ -944,6 +1048,101 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets }) => {
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Redigera ärende #{ticket.ticket_number}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-sm font-medium">Kundnamn</Label>
+              <Input
+                value={editForm.customer_name || ''}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, customer_name: e.target.value }))}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-sm font-medium">E-post</Label>
+                <Input
+                  value={editForm.customer_email || ''}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, customer_email: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label className="text-sm font-medium">Telefon</Label>
+                <Input
+                  value={editForm.customer_phone || ''}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, customer_phone: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div>
+              <Label className="text-sm font-medium">Primär kontaktkanal</Label>
+              <Select
+                value={editForm.preferred_contact_channel || 'email'}
+                onValueChange={(v) => setEditForm((prev) => ({ ...prev, preferred_contact_channel: v }))}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="email">E-post</SelectItem>
+                  <SelectItem value="sms">SMS</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-sm font-medium">Enhetsmodell</Label>
+              <Input
+                value={editForm.device_model || ''}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, device_model: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label className="text-sm font-medium">Anteckningar från kund</Label>
+              <Textarea
+                value={editForm.additional_notes || ''}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, additional_notes: e.target.value }))}
+                className="min-h-[80px]"
+              />
+            </div>
+            <div className="flex justify-between pt-2">
+              <Button onClick={handleSaveEdit} className="bg-blue-600 hover:bg-blue-700 text-white">
+                Spara ändringar
+              </Button>
+              {canDelete && (
+                <div>
+                  {confirmDelete ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-red-600 font-medium">Är du säker?</span>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={handleDeleteTicket}
+                        disabled={isDeleting}
+                      >
+                        {isDeleting ? <Loader2 size={14} className="animate-spin mr-1" /> : <Trash2 size={14} className="mr-1" />}
+                        Ja, radera
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setConfirmDelete(false)}>
+                        Avbryt
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-red-600 border-red-300 hover:bg-red-50"
+                      onClick={() => setConfirmDelete(true)}
+                    >
+                      <Trash2 size={14} className="mr-1" /> Radera ärende
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </motion.div>

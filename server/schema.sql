@@ -75,7 +75,9 @@ CREATE TABLE IF NOT EXISTS service_tickets (
   last_customer_decision TEXT,
   last_staff_contact_at TIMESTAMPTZ,
   last_staff_contact_by TEXT,
-  last_staff_contact_channel TEXT
+  last_staff_contact_channel TEXT,
+  assigned_to UUID REFERENCES users(id),
+  assigned_to_name TEXT
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS service_tickets_ticket_number_idx ON service_tickets (ticket_number);

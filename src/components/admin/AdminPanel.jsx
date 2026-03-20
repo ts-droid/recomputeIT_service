@@ -407,6 +407,34 @@ export function AdminPanel() {
             </div>
           </div>
 
+          {stats?.technician_stats?.length > 0 && (
+            <div className="mb-8">
+              <h3 className="text-lg font-semibold text-gray-800 mb-3">Per tekniker</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200 text-left text-gray-600">
+                      <th className="py-2 pr-4 font-medium">Tekniker</th>
+                      <th className="py-2 pr-4 font-medium">Ärenden</th>
+                      <th className="py-2 pr-4 font-medium">Avslutade</th>
+                      <th className="py-2 pr-4 font-medium">Snittid reparation</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stats.technician_stats.map((tech) => (
+                      <tr key={tech.assigned_to} className="border-b border-gray-100">
+                        <td className="py-2 pr-4 font-medium text-gray-900">{tech.assigned_to_name || 'Okänd'}</td>
+                        <td className="py-2 pr-4 text-gray-700">{tech.total_tickets}</td>
+                        <td className="py-2 pr-4 text-gray-700">{tech.closed_tickets}</td>
+                        <td className="py-2 pr-4 text-gray-700">{formatDuration(tech.avg_repair_seconds)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-col md:flex-row gap-4 mb-8">
             <div className="flex-1">
               <Label htmlFor="stats-from">Från</Label>

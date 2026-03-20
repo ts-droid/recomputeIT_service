@@ -13,6 +13,22 @@ import { standardizeActionsText } from '../services/notifications.js';
 const router = Router();
 
 // ---------------------------------------------------------------------------
+// GET /users  (list tenant users for technician dropdown)
+// ---------------------------------------------------------------------------
+router.get('/users', requireAuth, requireTenant, async (req, res) => {
+  try {
+    const { rows } = await query(
+      'SELECT id, name, email FROM users WHERE tenant_id = $1 ORDER BY name ASC NULLS LAST, email ASC',
+      [req.tenantId]
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error('GET /api/tickets/users error:', error);
+    res.status(500).json({ error: 'Kunde inte hämta användare.' });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // GET /  (list tickets)
 // ---------------------------------------------------------------------------
 router.get('/', requireAuth, requireTenant, async (req, res) => {
@@ -157,6 +173,32 @@ router.post('/', requireAuth, requireTenant, async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// DELETE /:id  (delete ticket)
+// ---------------------------------------------------------------------------
+router.delete('/:id', requireAuth, requireRole('admin'), requireTenant, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Delete related message_logs first (FK constraint)
+    await query('DELETE FROM message_logs WHERE ticket_id = $1 AND tenant_id = $2', [id, req.tenantId]);
+
+    const { rows } = await query(
+      'DELETE FROM service_tickets WHERE id = $1 AND tenant_id = $2 RETURNING id, ticket_number',
+      [id, req.tenantId]
+    );
+
+    if (!rows[0]) {
+      return res.status(404).json({ error: 'Ärende hittades inte.' });
+    }
+
+    res.json({ ok: true, deleted: rows[0] });
+  } catch (error) {
+    console.error('DELETE /api/tickets/:id error:', error);
+    res.status(500).json({ error: 'Kunde inte ta bort ärende.' });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // PATCH /:id  (update ticket)
 // ---------------------------------------------------------------------------
 router.patch('/:id', requireAuth, requireRole('base'), requireTenant, async (req, res) => {
@@ -164,6 +206,7 @@ router.patch('/:id', requireAuth, requireRole('base'), requireTenant, async (req
     const { id } = req.params;
     const updates = req.body || {};
     const allowedFields = new Set([
+      'customer_name',
       'status',
       'cost_proposal',
       'cost_proposal_approved',
@@ -183,6 +226,8 @@ router.patch('/:id', requireAuth, requireRole('base'), requireTenant, async (req
       'customer_notified_at',
       'picked_up_at',
       'closed_at',
+      'assigned_to',
+      'assigned_to_name',
     ]);
 
     if (updates.status) {

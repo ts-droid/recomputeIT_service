@@ -1,17 +1,128 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useToast } from '@/components/ui/use-toast';
 import { useSupabaseAuth } from '@/contexts/SupabaseAuthContext';
 import { useUiLanguage } from '@/contexts/UiLanguageContext';
 import { ServiceRegister } from '@/components/ServiceRegister';
 import { AdminPanel } from '@/components/admin/AdminPanel';
-import { LogOut, PlusCircle, Shield } from 'lucide-react';
+import { LogOut, PlusCircle, Shield, Settings } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { getDisplayVersion } from '@/lib/version';
 
 const APP_VERSION = getDisplayVersion();
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
-const Header = ({ onSignOut, user, role, t }) => (
+const LANGUAGE_OPTIONS = [
+  { code: 'sv', label: 'Svenska' },
+  { code: 'en', label: 'English' },
+];
+
+function AccountDialog({ open, onOpenChange, user, token }) {
+  const { toast } = useToast();
+  const { language, setLanguage } = useUiLanguage();
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (!currentPassword || !newPassword) {
+      toast({ title: 'Fyll i båda fälten', variant: 'destructive' });
+      return;
+    }
+    if (newPassword.length < 8) {
+      toast({ title: 'Nytt lösenord måste vara minst 8 tecken', variant: 'destructive' });
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/change-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || 'Kunde inte byta lösenord');
+      }
+      toast({ title: 'Lösenord bytt', description: 'Ditt lösenord har uppdaterats.' });
+      setCurrentPassword('');
+      setNewPassword('');
+    } catch (err) {
+      toast({ title: 'Fel', description: err?.message || 'Försök igen.', variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Mitt konto</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-6">
+          <div>
+            <p className="text-sm text-gray-600">Inloggad som <span className="font-medium">{user?.name || user?.email}</span></p>
+            <p className="text-xs text-gray-400">{user?.email}</p>
+          </div>
+
+          <div>
+            <Label className="text-sm font-medium mb-2 block">Språk i gränssnittet</Label>
+            <Select value={language} onValueChange={setLanguage}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {LANGUAGE_OPTIONS.map((lang) => (
+                  <SelectItem key={lang.code} value={lang.code}>
+                    {lang.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <form onSubmit={handleChangePassword} className="space-y-3 border-t border-gray-200 pt-4">
+            <h3 className="text-sm font-semibold text-gray-800">Byt lösenord</h3>
+            <div>
+              <Label className="text-sm">Nuvarande lösenord</Label>
+              <Input
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                autoComplete="current-password"
+              />
+            </div>
+            <div>
+              <Label className="text-sm">Nytt lösenord</Label>
+              <Input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                autoComplete="new-password"
+              />
+              <p className="text-xs text-gray-400 mt-1">Minst 8 tecken</p>
+            </div>
+            <Button type="submit" disabled={saving} className="w-full">
+              {saving ? 'Sparar...' : 'Byt lösenord'}
+            </Button>
+          </form>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const Header = ({ onSignOut, onOpenAccount, user, role, t }) => (
   <header className="bg-white shadow-md sticky top-0 z-50">
     <div className="container mx-auto px-4 sm:px-6 lg:px-8">
       <div className="flex justify-between items-center h-20">
@@ -32,6 +143,9 @@ const Header = ({ onSignOut, user, role, t }) => (
               </Button>
             </Link>
           )}
+          <Button onClick={onOpenAccount} variant="outline" className="text-gray-600 hover:bg-gray-100 border-gray-300 gap-2">
+            <Settings size={16} /> Mitt konto
+          </Button>
           <Button onClick={onSignOut} variant="outline" className="text-gray-600 hover:bg-gray-100 border-gray-300 gap-2">
             <LogOut size={16} /> {t.dashboard.logout}
           </Button>
@@ -42,12 +156,13 @@ const Header = ({ onSignOut, user, role, t }) => (
 );
 
 export default function DashboardPage() {
-  const { signOut, user, role } = useSupabaseAuth();
+  const { signOut, user, role, token } = useSupabaseAuth();
   const { t } = useUiLanguage();
+  const [accountOpen, setAccountOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header onSignOut={signOut} user={user} role={role} t={t} />
+      <Header onSignOut={signOut} onOpenAccount={() => setAccountOpen(true)} user={user} role={role} t={t} />
       <main className="container mx-auto p-4 md:p-8">
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -71,6 +186,7 @@ export default function DashboardPage() {
         <ServiceRegister />
         {(role === 'admin' || role === 'superadmin') ? <AdminPanel /> : null}
       </main>
+      <AccountDialog open={accountOpen} onOpenChange={setAccountOpen} user={user} token={token} />
     </div>
   );
 }

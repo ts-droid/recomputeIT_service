@@ -225,7 +225,12 @@ export async function initDb() {
   await query(`CREATE INDEX IF NOT EXISTS message_logs_provider_id_idx ON message_logs (provider, provider_id) WHERE provider_id IS NOT NULL`);
   await query(`CREATE INDEX IF NOT EXISTS message_logs_created_at_idx ON message_logs (created_at)`);
 
-  // 7b. Migrate legacy 'service' role to 'base'
+  // 7b. Technician assignment columns
+  await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS assigned_to UUID REFERENCES users(id)`);
+  await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS assigned_to_name TEXT`);
+  await query(`CREATE INDEX IF NOT EXISTS service_tickets_assigned_to_idx ON service_tickets (assigned_to)`);
+
+  // 7c. Migrate legacy 'service' role to 'base'
   await query(`UPDATE users SET role = 'base' WHERE role = 'service'`);
 
   // 8. Bootstrap admin user
