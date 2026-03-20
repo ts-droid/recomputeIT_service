@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
 import { generateEmailContent } from '@/lib/emailTemplates';
-import { Copy, Check, Send, Globe, Sparkles, Mail } from 'lucide-react';
+import { Send, Globe, Sparkles, Loader2 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { useSupabaseAuth } from '@/contexts/SupabaseAuthContext';
@@ -38,7 +38,6 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
   const { token } = useSupabaseAuth();
   const [costProposal, setCostProposal] = useState('');
   const [diagnosis, setDiagnosis] = useState('');
-  const [copied, setCopied] = useState(false);
   const [currentLang, setCurrentLang] = useState('sv');
   const [isSending, setIsSending] = useState(false);
   const [previewContent, setPreviewContent] = useState({ subject: '', body: '' });
@@ -53,8 +52,8 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
 
   useEffect(() => {
     if (ticket) {
-      setCostProposal(ticket.final_cost || '');
-      setDiagnosis(ticket.diagnosis || '');
+      setCostProposal(ticket.cost_proposal || ticket.final_cost || '');
+      setDiagnosis(ticket.planned_actions || ticket.diagnosis || '');
       setCurrentLang(ticket.disclaimer_language || 'sv');
     } else {
       setCostProposal('');
@@ -131,32 +130,6 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
   const effectiveBody = canFallbackToLocal
     ? (previewContent.body || emailContent?.body || '')
     : '';
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(effectiveBody);
-    setCopied(true);
-    toast({
-      title: "Kopierat!",
-      description: isCostProposal
-        ? "Texten för kostnadsförslaget har kopierats till urklipp."
-        : "Texten har kopierats till urklipp.",
-    });
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleCopyAndApprove = () => {
-    handleCopy();
-    if (isCostProposal) {
-      onUpdate(ticket.id, {
-        status: 'Väntar på kund',
-        final_cost: costProposal,
-        cost_proposal: costProposal,
-        diagnosis: diagnosis,
-        disclaimer_language: currentLang,
-      });
-    }
-    onOpenChange(false);
-  };
 
   const sendNotification = async (channel) => {
     if (!ticket || !templateType) return;
@@ -345,21 +318,13 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
           </div>
         </div>
 
-        <DialogFooter className="mt-6 gap-2 sm:gap-0">
-          <Button variant="outline" onClick={handleCopy}>
-            {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
-            Kopiera text
-          </Button>
-          <Button onClick={handleCopyAndApprove} className="bg-green-600 hover:bg-green-700">
-            <Send className="mr-2 h-4 w-4" />
-            Godkänn & Kopiera
-          </Button>
+        <DialogFooter className="mt-6">
           <Button
             onClick={() => sendNotification('auto')}
             className="bg-slate-800 hover:bg-slate-900"
             disabled={isSending || (!ticket?.customer_phone && !ticket?.customer_email)}
           >
-            <Mail className="mr-2 h-4 w-4" />
+            {isSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
             Skicka till kund
           </Button>
         </DialogFooter>

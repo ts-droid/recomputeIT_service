@@ -7,6 +7,8 @@ import { normalizePhone, normalizePreferredChannel, getLanguage } from '../servi
 import { translateText, translateIfNeeded, normalizeComparableText } from '../services/translation.js';
 import { buildEmailHtml, generateReplyToken, appendReplyGuidance } from '../services/email-parsing.js';
 import { sendEmail } from '../services/email.js';
+import { sendSms } from '../services/sms.js';
+import { resolvePreferredContactChannel } from '../services/phone.js';
 import { getAdminMessageSettings, DEFAULT_MESSAGE_SETTINGS, mergeMessageSettings } from '../services/message-settings.js';
 import { standardizeActionsText } from '../services/notifications.js';
 
@@ -175,7 +177,7 @@ router.post('/', requireAuth, requireTenant, async (req, res) => {
 // ---------------------------------------------------------------------------
 // DELETE /:id  (delete ticket)
 // ---------------------------------------------------------------------------
-router.delete('/:id', requireAuth, requireRole('admin'), requireTenant, async (req, res) => {
+router.delete('/:id', requireAuth, requireRole('base'), requireTenant, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -355,12 +357,9 @@ router.get('/:id/messages', requireAuth, requireTenant, async (req, res) => {
 router.post('/:id/messages', requireAuth, requireRole('base'), requireTenant, async (req, res) => {
   try {
     const { id } = req.params;
-    const { subject, body, message, text, channel = 'email' } = req.body || {};
+    const { subject, body, message, text, channel: requestedChannel = 'auto' } = req.body || {};
     const sender = req.user?.email || 'okänd';
 
-    if (channel !== 'email') {
-      return res.status(400).json({ error: 'Endast e-post stöds för manuell konversation just nu.' });
-    }
     const rawBodyInput = [body, message, text].find(
       (value) => value !== undefined && value !== null && value.toString().trim()
     );
@@ -373,8 +372,8 @@ router.post('/:id/messages', requireAuth, requireRole('base'), requireTenant, as
     if (!ticket) {
       return res.status(404).json({ error: 'Ärende hittades inte.' });
     }
-    if (!ticket.customer_email) {
-      return res.status(400).json({ error: 'Kunden saknar e-postadress.' });
+    if (!ticket.customer_email && !ticket.customer_phone) {
+      return res.status(400).json({ error: 'Kunden saknar kontaktuppgifter.' });
     }
 
     const baseSubject = subject?.toString().trim() || `Re: Ärende #${ticket.ticket_number}`;
@@ -386,37 +385,81 @@ router.post('/:id/messages', requireAuth, requireRole('base'), requireTenant, as
       translateIfNeeded(baseBody, language, { allowEnglish: true }),
     ]);
     const resolvedSubject = translatedSubject?.toString().trim() || baseSubject;
-    const replyToken = generateReplyToken();
-    const resolvedBody = appendReplyGuidance(translatedBody?.toString().trim() || baseBody, language, replyToken);
-    const resolvedHtml = buildEmailHtml(resolvedBody);
-    if (!resolvedBody) {
+    const resolvedBodyText = translatedBody?.toString().trim() || baseBody;
+    if (!resolvedBodyText) {
       return res.status(400).json({ error: 'Meddelandetext saknas efter översättning.' });
     }
 
-    await sendEmail({
-      to: ticket.customer_email,
-      subject: resolvedSubject,
-      body: resolvedBody,
-      html: resolvedHtml,
-    });
+    // Resolve which channel(s) to use
+    const preferred = resolvePreferredContactChannel(ticket);
+    const effectiveChannel = requestedChannel === 'auto' ? preferred : requestedChannel;
 
-    const inserted = await query(
-      `INSERT INTO message_logs (tenant_id, ticket_id, channel, direction, sender_user, to_number, subject, body, reply_token, provider)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-       RETURNING id, ticket_id, channel, direction, sender_user, to_number, from_number, subject, body, provider, provider_id, created_at`,
-      [req.tenantId, ticket.id, 'email', 'outbound', sender, ticket.customer_email, resolvedSubject, resolvedBody, replyToken, 'smtp']
-    );
+    const delivery = { sms_sent: false, email_sent: false, warnings: [] };
+    let insertedRow = null;
 
+    // SMS send
+    const shouldSms = effectiveChannel === 'sms' || (requestedChannel === 'auto' && preferred === 'sms');
+    if (shouldSms && ticket.customer_phone) {
+      try {
+        const smsResponse = await sendSms({ to: ticket.customer_phone, message: resolvedBodyText });
+        const smsInserted = await query(
+          `INSERT INTO message_logs (tenant_id, ticket_id, channel, direction, sender_user, to_number, body, provider, provider_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+           RETURNING id, ticket_id, channel, direction, sender_user, to_number, from_number, subject, body, provider, provider_id, created_at`,
+          [req.tenantId, ticket.id, 'sms', 'outbound', sender, ticket.customer_phone, resolvedBodyText, '46elks', smsResponse?.id || null]
+        );
+        delivery.sms_sent = true;
+        insertedRow = smsInserted.rows[0];
+      } catch (smsErr) {
+        console.error('Manual SMS send failed:', smsErr);
+        delivery.warnings.push('SMS kunde inte skickas.');
+      }
+    }
+
+    // Email send (as primary or fallback)
+    const shouldEmail = effectiveChannel === 'email' || (!delivery.sms_sent && ticket.customer_email);
+    if (shouldEmail && ticket.customer_email) {
+      try {
+        const replyToken = generateReplyToken();
+        const resolvedBody = appendReplyGuidance(resolvedBodyText, language, replyToken);
+        const resolvedHtml = buildEmailHtml(resolvedBody);
+
+        await sendEmail({
+          to: ticket.customer_email,
+          subject: resolvedSubject,
+          body: resolvedBody,
+          html: resolvedHtml,
+        });
+
+        const emailInserted = await query(
+          `INSERT INTO message_logs (tenant_id, ticket_id, channel, direction, sender_user, to_number, subject, body, reply_token, provider)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+           RETURNING id, ticket_id, channel, direction, sender_user, to_number, from_number, subject, body, provider, provider_id, created_at`,
+          [req.tenantId, ticket.id, 'email', 'outbound', sender, ticket.customer_email, resolvedSubject, resolvedBody, replyToken, 'smtp']
+        );
+        delivery.email_sent = true;
+        if (!insertedRow) insertedRow = emailInserted.rows[0];
+      } catch (emailErr) {
+        console.error('Manual email send failed:', emailErr);
+        delivery.warnings.push('E-post kunde inte skickas.');
+      }
+    }
+
+    if (!delivery.sms_sent && !delivery.email_sent) {
+      return res.status(500).json({ error: 'Kunde inte skicka meddelandet.', details: delivery.warnings.join(' ') });
+    }
+
+    const sentChannel = delivery.sms_sent && delivery.email_sent ? 'sms+email' : delivery.sms_sent ? 'sms' : 'email';
     await query(
       `UPDATE service_tickets
        SET last_staff_contact_at = NOW(),
            last_staff_contact_by = $2,
-           last_staff_contact_channel = 'email'
+           last_staff_contact_channel = $3
        WHERE id = $1`,
-      [ticket.id, sender]
+      [ticket.id, sender, sentChannel]
     );
 
-    res.status(201).json(inserted.rows[0]);
+    res.status(201).json({ ...insertedRow, sms_sent: delivery.sms_sent, email_sent: delivery.email_sent, warnings: delivery.warnings });
   } catch (error) {
     console.error('POST /api/tickets/:id/messages error:', error);
     res.status(500).json({ error: 'Kunde inte skicka meddelandet.' });

@@ -164,7 +164,15 @@ export const translateText = async (text, targetLanguage, options = {}) => {
 
 export const translateIfNeeded = async (text, language, options = {}) => {
   const { allowEnglish = false, strict = false } = options;
-  if (!language || language === 'sv') return text;
+  if (!text || !language) return text;
+
+  // If target is Swedish, only translate when the text is NOT already Swedish
+  if (language === 'sv') {
+    if (isLikelySwedish(text)) return text;
+    // Text is not Swedish — translate it to Swedish
+    return translateText(text, 'sv', { strict });
+  }
+
   if (language === 'en' && !allowEnglish) return text;
   return translateText(text, language, { strict });
 };

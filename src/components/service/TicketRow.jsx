@@ -111,7 +111,7 @@ const cleanChatBody = (body = '') => {
 
 export const TicketRow = ({ ticket, onUpdate, onRefreshTickets, onDelete, tenantUsers = [] }) => {
   const { role, token, user: currentUser } = useSupabaseAuth();
-  const canDelete = role === 'admin' || role === 'superadmin';
+  const canDelete = Boolean(role);
   const canEdit = Boolean(role); // all authenticated roles can edit tickets
   const [isOpen, setIsOpen] = useState(false);
   const [internalNotes, setInternalNotes] = useState('');
@@ -257,7 +257,7 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets, onDelete, tenant
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          channel: 'email',
+          channel: 'auto',
           subject: composeSubject,
           body: composeBody,
         }),
@@ -268,7 +268,13 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets, onDelete, tenant
       }
       setComposeBody('');
       setMessages((prev) => [payload, ...prev]);
-      toast({ title: 'Skickat', description: 'Meddelandet skickades till kunden.' });
+      const sentSms = Boolean(payload?.sms_sent);
+      const sentEmail = Boolean(payload?.email_sent);
+      let desc = 'Meddelandet skickades till kunden.';
+      if (sentSms && sentEmail) desc = 'SMS och e-post skickades till kunden.';
+      else if (sentSms) desc = 'SMS skickades till kunden.';
+      else if (sentEmail) desc = 'E-post skickades till kunden.';
+      toast({ title: 'Skickat', description: desc });
     } catch (error) {
       toast({
         title: 'Kunde inte skicka',
