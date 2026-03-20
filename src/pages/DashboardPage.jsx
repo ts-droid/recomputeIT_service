@@ -20,6 +20,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 const LANGUAGE_OPTIONS = [
   { code: 'sv', label: 'Svenska' },
   { code: 'en', label: 'English' },
+  { code: 'ar', label: 'العربية' },
 ];
 
 function AccountDialog({ open, onOpenChange, user, token }) {
