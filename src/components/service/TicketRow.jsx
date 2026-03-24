@@ -804,6 +804,14 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets, onDelete, tenant
               <div className="space-y-4">
                  <h3 className="font-semibold text-gray-800 flex items-center gap-2"><Edit2 size={16} />Hantering</h3>
 
+                 <Button
+                   onClick={handleReprint}
+                   variant="outline"
+                   className="w-full"
+                 >
+                   <Printer size={16} className="mr-2" /> Skriv ut igen
+                 </Button>
+
                  {/* Step indicator */}
                  {(() => {
                    const currentStep =
@@ -1132,24 +1140,15 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets, onDelete, tenant
                              <Sparkles size={12} className="text-purple-500" /> Skapar ett tydligt kvitto för kunden.
                            </p>
 
-                           <div className="flex gap-3">
-                             <Button
-                               onClick={handleReprint}
-                               variant="outline"
-                               className="w-full"
-                             >
-                               <Printer size={16} className="mr-2" /> Skriv ut igen
-                             </Button>
-                             <Button
-                               onClick={handleToggleHidden}
-                               variant="outline"
-                               className="w-full"
-                               disabled={!canEdit}
-                             >
-                               {ticket.is_hidden ? <Eye size={16} className="mr-2" /> : <EyeOff size={16} className="mr-2" />}
-                               {ticket.is_hidden ? 'Visa' : 'Dölj'}
-                             </Button>
-                           </div>
+                           <Button
+                             onClick={handleToggleHidden}
+                             variant="outline"
+                             className="w-full"
+                             disabled={!canEdit}
+                           >
+                             {ticket.is_hidden ? <Eye size={16} className="mr-2" /> : <EyeOff size={16} className="mr-2" />}
+                             {ticket.is_hidden ? 'Visa' : 'Dölj'}
+                           </Button>
                          </div>
                        )}
 
@@ -1174,24 +1173,15 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets, onDelete, tenant
                              </div>
                            </div>
 
-                           <div className="flex gap-3">
-                             <Button
-                               onClick={handleReprint}
-                               variant="outline"
-                               className="w-full"
-                             >
-                               <Printer size={16} className="mr-2" /> Skriv ut igen
-                             </Button>
-                             <Button
-                               onClick={handleToggleHidden}
-                               variant="outline"
-                               className="w-full"
-                               disabled={!canEdit}
-                             >
-                               {ticket.is_hidden ? <Eye size={16} className="mr-2" /> : <EyeOff size={16} className="mr-2" />}
-                               {ticket.is_hidden ? 'Visa' : 'Dölj'}
-                             </Button>
-                           </div>
+                           <Button
+                             onClick={handleToggleHidden}
+                             variant="outline"
+                             className="w-full"
+                             disabled={!canEdit}
+                           >
+                             {ticket.is_hidden ? <Eye size={16} className="mr-2" /> : <EyeOff size={16} className="mr-2" />}
+                             {ticket.is_hidden ? 'Visa' : 'Dölj'}
+                           </Button>
                          </div>
                        )}
 
