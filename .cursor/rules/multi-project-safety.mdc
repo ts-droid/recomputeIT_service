@@ -1,0 +1,45 @@
+---
+description: Multi-project safety routines (avoid mixing repos, envs, terminals)
+alwaysApply: true
+---
+
+# Multi-project safety (recomputeIT_service)
+
+## Terminal discipline
+
+- Use one terminal per purpose and name it with the repo + task.
+  - Example: `svc/web`, `svc/api`, `svc/db`, `svc/migrate`.
+- Before running any command, sanity check where you are:
+
+```bash
+pwd
+git rev-parse --show-toplevel
+git status -sb
+```
+
+## Before commit
+
+- Run:
+
+```bash
+git status -sb
+git diff
+```
+
+- Confirm you are committing in the correct repo and branch.
+
+## Before push
+
+- Run:
+
+```bash
+git status -sb
+git log -5 --oneline --decorate
+```
+
+## Suggested scripts (project conventions)
+
+- Start web: `npm run dev`
+- Start API: `npm run dev:api`
+- Build: `npm run build`
+
