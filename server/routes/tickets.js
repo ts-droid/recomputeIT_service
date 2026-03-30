@@ -211,6 +211,7 @@ router.patch('/:id', requireAuth, requireRole('base'), requireTenant, async (req
       'customer_name',
       'status',
       'cost_proposal',
+      'not_repairable',
       'cost_proposal_approved',
       'planned_actions',
       'internal_notes',

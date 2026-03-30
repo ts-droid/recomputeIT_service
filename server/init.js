@@ -170,6 +170,7 @@ export async function initDb() {
 
   // 7. Other column migrations
   await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS cost_proposal TEXT`);
+  await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS not_repairable BOOLEAN NOT NULL DEFAULT FALSE`);
   await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ`);
   await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS customer_notified_at TIMESTAMPTZ`);
   await query(`ALTER TABLE service_tickets ADD COLUMN IF NOT EXISTS picked_up_at TIMESTAMPTZ`);

@@ -272,4 +272,70 @@ router.post('/notify/repair-ready', requireAuth, requireRole('base'), requireTen
   }
 });
 
+// ---------------------------------------------------------------------------
+// POST /notify/not-repairable
+// ---------------------------------------------------------------------------
+router.post('/notify/not-repairable', requireAuth, requireRole('base'), requireTenant, async (req, res) => {
+  try {
+    const { ticketId, channel, language: requestedLanguage } = req.body || {};
+    const { rows } = await query('SELECT * FROM service_tickets WHERE id = $1 AND tenant_id = $2', [ticketId, req.tenantId]);
+    const ticket = rows[0];
+    if (!ticket) return res.status(404).json({ error: 'Ärende hittades inte.' });
+
+    const language = requestedLanguage || getLanguage(ticket);
+    const replyToken = generateReplyToken();
+    if (requestedLanguage && requestedLanguage !== ticket.disclaimer_language) {
+      await query(`UPDATE service_tickets SET disclaimer_language = $1 WHERE id = $2`, [requestedLanguage, ticket.id]);
+    }
+    const localizedTicket = await localizeTicketFreeText(ticket, language, { strict: language !== 'sv' });
+    const messageSettings = await getAdminMessageSettings(req.tenantId);
+    const preview = await buildNotificationPreview({
+      templateType: 'ejReparerbar',
+      ticket: localizedTicket,
+      language,
+      settings: messageSettings,
+      replyToken,
+    });
+    const sender = req.user?.email || 'okänd';
+
+    const result = await sendNotification({
+      ticket,
+      channel,
+      message: preview.sms,
+      translatedSubject: preview.subject,
+      translatedBody: preview.body,
+      html: preview.html,
+      replyToken,
+      sender,
+      tenantId: req.tenantId,
+    });
+
+    if (result.error) {
+      return res.status(result.status).json({ error: result.error, details: result.details });
+    }
+
+    const sentChannels =
+      result.sms_sent && result.email_sent ? 'sms+email' : result.sms_sent ? 'sms' : 'email';
+
+    await query(
+      `UPDATE service_tickets
+       SET status = $1,
+           not_repairable = TRUE,
+           completed_at = COALESCE(completed_at, NOW()),
+           customer_notified_at = NOW(),
+           closed_at = NULL,
+           last_staff_contact_at = NOW(),
+           last_staff_contact_by = $3,
+           last_staff_contact_channel = $4
+       WHERE id = $2`,
+      ['Färdig', ticket.id, sender, sentChannels]
+    );
+
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    console.error('POST /api/notify/not-repairable error:', error);
+    res.status(500).json({ error: 'Kunde inte skicka.' });
+  }
+});
+
 export default router;

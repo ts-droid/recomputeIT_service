@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS service_tickets (
   status TEXT DEFAULT 'Nytt',
   user_id TEXT,
   cost_proposal TEXT,
+  not_repairable BOOLEAN NOT NULL DEFAULT FALSE,
   cost_proposal_approved BOOLEAN NOT NULL DEFAULT FALSE,
   internal_notes TEXT,
   work_done_summary TEXT,

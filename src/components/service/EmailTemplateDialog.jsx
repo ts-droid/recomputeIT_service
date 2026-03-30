@@ -47,6 +47,7 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
 
   const isCostProposal = templateType === 'kostnadsforslag' || templateType === 'kostnadsforslag_uppdatering';
   const isCostProposalUpdate = templateType === 'kostnadsforslag_uppdatering';
+  const isNotRepairable = templateType === 'ejReparerbar';
   const requireStrictTranslatedPreview = templateType === 'reparationFardig';
   const placeholderText = translationPlaceholders[currentLang] || translationPlaceholders.sv;
 
@@ -148,7 +149,11 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
         await onUpdate(ticket.id, { final_cost: costProposal, diagnosis });
       }
 
-      const endpoint = isCostProposal ? '/api/notify/cost-proposal' : '/api/notify/repair-ready';
+      const endpoint = isCostProposal
+        ? '/api/notify/cost-proposal'
+        : isNotRepairable
+          ? '/api/notify/not-repairable'
+          : '/api/notify/repair-ready';
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -233,14 +238,22 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
       <DialogContent className="max-w-[calc(100%-1rem)] sm:max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {isCostProposalUpdate ? 'Uppdaterat kostnadsförslag' : isCostProposal ? 'Underlag för kostnadsförslag' : 'Meddelande till kund'}
+            {isCostProposalUpdate
+              ? 'Uppdaterat kostnadsförslag'
+              : isCostProposal
+                ? 'Underlag för kostnadsförslag'
+                : isNotRepairable
+                  ? 'Meddelande: kan ej reparera'
+                  : 'Meddelande till kund'}
           </DialogTitle>
           <DialogDescription>
             {isCostProposalUpdate
               ? 'Granska och skicka det uppdaterade kostnadsförslaget till kunden.'
               : isCostProposal
               ? 'Granska, kopiera och skicka detta kostnadsförslag till kunden.'
-              : 'Granska, kopiera och skicka meddelande om färdig reparation.'}
+              : isNotRepairable
+                ? 'Granska och skicka meddelande om att enheten inte går att reparera.'
+                : 'Granska, kopiera och skicka meddelande om färdig reparation.'}
           </DialogDescription>
         </DialogHeader>
 

@@ -24,6 +24,12 @@ export const textTemplates = {
     en: (ticket) =>
       `Hi ${getFirstName(ticket.customer_name)}!\nYour device for case #${ticket.ticket_number} is ready for pickup.\n${ticket.final_cost ? `Final cost: ${ticket.final_cost} SEK.\n` : ''}${ticket.work_done_summary ? `Work done: ${ticket.work_done_summary}\n` : ''}Welcome in!`,
   },
+  notRepairable: {
+    sv: (ticket) =>
+      `Hej ${getFirstName(ticket.customer_name)}!\nVi har felsökt din ${ticket.device_type}${ticket.device_model ? ` ${ticket.device_model}` : ''} (ärende #${ticket.ticket_number}), men tyvärr kan vi inte reparera enheten.\nDu är välkommen att hämta den i butik.\nHar du frågor, svara på detta meddelande.`,
+    en: (ticket) =>
+      `Hi ${getFirstName(ticket.customer_name)}!\nWe have checked your ${ticket.device_type}${ticket.device_model ? ` ${ticket.device_model}` : ''} (case #${ticket.ticket_number}), but unfortunately we can’t repair the device.\nYou’re welcome to pick it up at the store.\nIf you have questions, reply to this message.`,
+  },
 };
 
 export const emailTemplates = {
@@ -57,6 +63,28 @@ export const emailTemplates = {
       body: `Hi ${getFirstName(ticket.customer_name)},\n\nYour device is ready for pickup. Welcome in!`,
     }),
   },
+  notRepairable: {
+    sv: (ticket) => ({
+      subject: `Uppdatering om ärende #${ticket.ticket_number}`,
+      body:
+        `Hej ${getFirstName(ticket.customer_name)},\n\n` +
+        `Vi har felsökt din ${ticket.device_type}${ticket.device_model ? ` ${ticket.device_model}` : ''} (ärende #${ticket.ticket_number}), men tyvärr kan vi inte reparera enheten.\n\n` +
+        `Du är välkommen att hämta den i butik.\n\n` +
+        `Om du har frågor kan du svara på detta meddelande.\n\n` +
+        `Med vänliga hälsningar,\n` +
+        `Ditt serviceteam`,
+    }),
+    en: (ticket) => ({
+      subject: `Update on case #${ticket.ticket_number}`,
+      body:
+        `Hi ${getFirstName(ticket.customer_name)},\n\n` +
+        `We have checked your ${ticket.device_type}${ticket.device_model ? ` ${ticket.device_model}` : ''} (case #${ticket.ticket_number}), but unfortunately we can’t repair the device.\n\n` +
+        `You’re welcome to pick it up at the store.\n\n` +
+        `If you have questions, reply to this message.\n\n` +
+        `Best regards,\n` +
+        `Your Service Team`,
+    }),
+  },
 };
 
 export const DEFAULT_MESSAGE_SETTINGS = {
@@ -79,6 +107,10 @@ export const DEFAULT_MESSAGE_SETTINGS = {
   ready_prompt_by_lang: {
     sv: 'Har du frågor, svara på detta mail eller SMS.',
     en: 'If you have questions, reply to this email or SMS.',
+  },
+  not_repairable_prompt_by_lang: {
+    sv: 'Vi kan tyvärr inte reparera enheten. Du är välkommen att hämta den i butik. Har du frågor, svara på detta meddelande.',
+    en: 'Unfortunately we can’t repair the device. You’re welcome to pick it up at the store. If you have questions, reply to this message.',
   },
   decision_approved_sms_by_lang: {
     sv: 'Tack för förtroendet. Vi återkommer så snart reparationen är klar.',
@@ -137,6 +169,7 @@ export const mergeMessageSettings = (raw) => {
     cost_prompt_by_lang: mergeByLang('cost_prompt_by_lang'),
     cost_update_prompt_by_lang: mergeByLang('cost_update_prompt_by_lang'),
     ready_prompt_by_lang: mergeByLang('ready_prompt_by_lang'),
+    not_repairable_prompt_by_lang: mergeByLang('not_repairable_prompt_by_lang'),
     decision_approved_sms_by_lang: mergeByLang('decision_approved_sms_by_lang'),
     decision_approved_email_subject_by_lang: mergeByLang('decision_approved_email_subject_by_lang'),
     decision_approved_email_body_by_lang: mergeByLang('decision_approved_email_body_by_lang'),
@@ -205,6 +238,9 @@ export const autoTranslateMessageSettings = async (settings = {}) => {
       overwriteExisting: true,
     }),
     ready_prompt_by_lang: await fillMissingTranslations(normalized.ready_prompt_by_lang, {
+      overwriteExisting: true,
+    }),
+    not_repairable_prompt_by_lang: await fillMissingTranslations(normalized.not_repairable_prompt_by_lang, {
       overwriteExisting: true,
     }),
     decision_approved_sms_by_lang: await fillMissingTranslations(normalized.decision_approved_sms_by_lang, {

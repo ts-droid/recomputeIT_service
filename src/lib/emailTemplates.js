@@ -15,6 +15,10 @@ const templates = {
       subject: `Uppdaterat kostnadsförslag: Ärende ${ticket.ticket_number}`,
       body: `Hej ${getFirstName(ticket.customer_name)},\n\nVi har ett uppdaterat kostnadsförslag för din ${ticket.device_type} ${ticket.device_model || ''} med ärendenummer ${ticket.ticket_number}.\n\nDiagnos:\n${ticket.diagnosis || '[BESKRIV DIAGNOS HÄR]'}\n\nNy total kostnad för reparation: ${ticket.final_cost || '[PRIS]'} kr\n\nVänligen meddela oss om du vill gå vidare med reparationen.\n\nMed vänliga hälsningar,\nDitt serviceteam`
     }),
+    ejReparerbar: (ticket) => ({
+      subject: `Uppdatering: Ärende ${ticket.ticket_number}`,
+      body: `Hej ${getFirstName(ticket.customer_name)},\n\nVi har felsökt din ${ticket.device_type} ${ticket.device_model || ''} (ärende ${ticket.ticket_number}), men tyvärr kan vi inte reparera enheten.\n\nDu är välkommen att hämta den i butik.\n\nOm du har frågor kan du svara på detta meddelande.\n\nMed vänliga hälsningar,\nDitt serviceteam`
+    }),
   },
   en: {
     reparationFardig: (ticket) => ({
@@ -28,6 +32,10 @@ const templates = {
     kostnadsforslag_uppdatering: (ticket) => ({
       subject: `Updated Price Quote: Case ${ticket.ticket_number}`,
       body: `Hi ${getFirstName(ticket.customer_name)},\n\nWe have an updated price quote for your ${ticket.device_type} ${ticket.device_model || ''} with case number ${ticket.ticket_number}.\n\nDiagnosis:\n${ticket.diagnosis || '[DESCRIBE DIAGNOSIS HERE]'}\n\nNew total repair cost: ${ticket.final_cost || '[PRICE]'} kr\n\nPlease let us know if you wish to proceed with the repair.\n\nBest regards,\nYour Service Team`
+    }),
+    ejReparerbar: (ticket) => ({
+      subject: `Update: Case ${ticket.ticket_number}`,
+      body: `Hi ${getFirstName(ticket.customer_name)},\n\nWe have checked your ${ticket.device_type} ${ticket.device_model || ''} (case ${ticket.ticket_number}), but unfortunately we can’t repair the device.\n\nYou’re welcome to pick it up at the store.\n\nIf you have questions, reply to this message.\n\nBest regards,\nYour Service Team`
     }),
   },
   ar: {

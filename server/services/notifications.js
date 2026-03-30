@@ -287,6 +287,24 @@ const buildNotificationPreview = async ({ templateType, ticket, language, settin
     return { subject, body, display_body: stripReplySystemLines(body), html: buildEmailHtml(body), sms };
   }
 
+  if (templateType === 'ejReparerbar') {
+    const messageBase =
+      textTemplates.notRepairable?.[language]?.(localizedTicket) ||
+      textTemplates.notRepairable?.sv(localizedTicket);
+    let sms = await translateIfNeeded(messageBase, language);
+    const template =
+      emailTemplates.notRepairable?.[language]?.(localizedTicket) ||
+      emailTemplates.notRepairable?.sv(localizedTicket);
+    const subject = await translateIfNeeded(template.subject, language);
+    let body = await translateIfNeeded(template.body, language);
+    const localizedPrompt = await getLocalizedSetting(activeSettings.not_repairable_prompt_by_lang, language);
+    body = appendUniqueBlock(body, renderMessageSettingTemplate(localizedPrompt, commonVariables));
+    body = appendUniqueBlock(body, emailFooter);
+    body = appendReplyGuidance(body, language, replyToken);
+    sms = appendUniqueBlock(sms, smsFooter);
+    return { subject, body, display_body: stripReplySystemLines(body), html: buildEmailHtml(body), sms };
+  }
+
   const messageBase =
     textTemplates.repairReady[language]?.(localizedTicket) ||
     textTemplates.repairReady.sv(localizedTicket);

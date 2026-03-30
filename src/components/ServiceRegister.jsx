@@ -93,6 +93,16 @@ export function ServiceRegister() {
       }
     }
 
+    // Always sort "Ej reparerbar" last in pickup-ready list.
+    ready.sort((a, b) => {
+      const aFlag = a.not_repairable ? 1 : 0;
+      const bFlag = b.not_repairable ? 1 : 0;
+      if (aFlag !== bFlag) return aFlag - bFlag;
+      const aTs = a.customer_notified_at || a.completed_at || a.created_at;
+      const bTs = b.customer_notified_at || b.completed_at || b.created_at;
+      return new Date(bTs) - new Date(aTs);
+    });
+
     return { myTickets: mine, unhandledTickets: unhandled, inProgressTickets: inProgress, readyTickets: ready, closedTickets: closed };
   }, [tickets, searchTerm, currentUser?.id]);
 

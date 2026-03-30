@@ -22,6 +22,7 @@ const statusStyles = {
   "Kostnadsförslag nekat": "bg-red-100 text-red-800",
   "Färdig": "bg-green-100 text-green-800",
   "Avslutad": "bg-gray-100 text-gray-800",
+  "Ej reparerbar": "bg-red-100 text-red-800",
 };
 
 const languageMap = {
@@ -113,6 +114,7 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets, onDelete, tenant
   const { role, token, user: currentUser } = useSupabaseAuth();
   const canDelete = Boolean(role);
   const canEdit = Boolean(role); // all authenticated roles can edit tickets
+  const canReprintReceipt = Boolean(token || currentUser || role);
   const [isOpen, setIsOpen] = useState(false);
   const [internalNotes, setInternalNotes] = useState('');
   const [plannedActions, setPlannedActions] = useState('');
@@ -451,9 +453,18 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets, onDelete, tenant
       });
     }
 
-    const newStatus = templateType === 'reparationFardig' ? 'Färdig' : 'Väntar på kund';
-    if (ticket.status !== newStatus) {
-      await onUpdate(ticket.id, { status: newStatus });
+    if (templateType === 'ejReparerbar') {
+      await onUpdate(ticket.id, { status: 'Färdig', not_repairable: true });
+    }
+
+    const desiredStatus =
+      templateType === 'reparationFardig'
+        ? 'Färdig'
+        : (templateType === 'kostnadsforslag' || templateType === 'kostnadsforslag_uppdatering')
+          ? 'Väntar på kund'
+          : null;
+    if (desiredStatus && ticket.status !== desiredStatus) {
+      await onUpdate(ticket.id, { status: desiredStatus });
     }
 
     setSelectedTemplateType(templateType);
@@ -645,7 +656,9 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets, onDelete, tenant
                 Nytt meddelande
               </Badge>
             )}
-            <Badge className={`${statusStyles[ticket.status] || statusStyles['Nytt']} font-medium`}>{ticket.status}</Badge>
+            <Badge className={`${(ticket.not_repairable ? statusStyles['Ej reparerbar'] : statusStyles[ticket.status]) || statusStyles['Nytt']} font-medium`}>
+              {ticket.not_repairable ? 'Ej reparerbar' : ticket.status}
+            </Badge>
           </div>
         </div>
         {/* Mobile card row */}
@@ -669,7 +682,9 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets, onDelete, tenant
             </div>
           </div>
           <div className="flex flex-col items-end gap-1 shrink-0">
-            <Badge className={`${statusStyles[ticket.status] || statusStyles['Nytt']} font-medium text-[10px] px-1.5 py-0.5`}>{ticket.status}</Badge>
+            <Badge className={`${(ticket.not_repairable ? statusStyles['Ej reparerbar'] : statusStyles[ticket.status]) || statusStyles['Nytt']} font-medium text-[10px] px-1.5 py-0.5`}>
+              {ticket.not_repairable ? 'Ej reparerbar' : ticket.status}
+            </Badge>
             {hasNewCustomerMessage && (
               <Badge className="bg-blue-100 text-blue-800 border border-blue-200 font-medium text-[10px] px-1.5 py-0.5">
                 <MessageSquare size={10} className="mr-0.5" />
@@ -808,8 +823,9 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets, onDelete, tenant
                    onClick={handleReprint}
                    variant="outline"
                    className="w-full"
+                   disabled={!canReprintReceipt}
                  >
-                   <Printer size={16} className="mr-2" /> Skriv ut igen
+                   <Printer size={16} className="mr-2" /> Skriv ut servicekvitto igen
                  </Button>
 
                  {/* Step indicator */}
@@ -896,6 +912,22 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets, onDelete, tenant
                            </SelectContent>
                          </Select>
                        </div>
+
+                      {/* Quick action: close as not repairable */}
+                      {currentStep !== 5 && (
+                        <div className="pt-1">
+                          <Button
+                            onClick={() => handleNotify('ejReparerbar')}
+                            disabled={isProcessing || (!ticket.customer_email && !ticket.customer_phone) || !canEdit}
+                            className="w-full bg-gray-800 hover:bg-gray-900 text-white"
+                          >
+                            Avsluta: kan ej reparera
+                          </Button>
+                          <p className="mt-2 text-xs text-gray-500">
+                            Skickar standardtext till kund och markerar ärendet som avslutat.
+                          </p>
+                        </div>
+                      )}
 
                        {/* ===== STEP 1: Bedömning ===== */}
                        {currentStep === 1 && (

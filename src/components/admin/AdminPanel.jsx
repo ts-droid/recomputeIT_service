@@ -33,6 +33,7 @@ const normalizeSettingsPayload = (data = {}) => ({
   cost_prompt_by_lang: { ...emptyByLang(), ...(data?.cost_prompt_by_lang || {}) },
   cost_update_prompt_by_lang: { ...emptyByLang(), ...(data?.cost_update_prompt_by_lang || {}) },
   ready_prompt_by_lang: { ...emptyByLang(), ...(data?.ready_prompt_by_lang || {}) },
+  not_repairable_prompt_by_lang: { ...emptyByLang(), ...(data?.not_repairable_prompt_by_lang || {}) },
   decision_approved_sms_by_lang: { ...emptyByLang(), ...(data?.decision_approved_sms_by_lang || {}) },
   decision_approved_email_subject_by_lang: {
     ...emptyByLang(),
@@ -555,6 +556,25 @@ export function AdminPanel() {
                           <Textarea
                             value={messageSettings.ready_prompt_by_lang?.[lang.code] || ''}
                             onChange={(event) => updateSettingField('ready_prompt_by_lang', lang.code, event.target.value)}
+                            className="min-h-[90px]"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="border border-gray-200 rounded-xl p-4">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-1">Standardtext: Ej reparerbar</h3>
+                    <p className="text-xs text-gray-500 mb-3">
+                      Du kan använda variabler: <code>{'{{ticket_number}}'}</code>, <code>{'{{customer_name}}'}</code>, <code>{'{{device_type}}'}</code>, <code>{'{{device_model}}'}</code>, <code>{'{{diagnosis}}'}</code>.
+                    </p>
+                    <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
+                      {LANGUAGE_OPTIONS.map((lang) => (
+                        <div key={`not-repairable-prompt-${lang.code}`}>
+                          <Label className="mb-2 block">{lang.label}</Label>
+                          <Textarea
+                            value={messageSettings.not_repairable_prompt_by_lang?.[lang.code] || ''}
+                            onChange={(event) => updateSettingField('not_repairable_prompt_by_lang', lang.code, event.target.value)}
                             className="min-h-[90px]"
                           />
                         </div>
