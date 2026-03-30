@@ -90,6 +90,9 @@ export function AdminPanel() {
   const [savingSettings, setSavingSettings] = useState(false);
   const [translatingSettings, setTranslatingSettings] = useState(false);
   const [adminTab, setAdminTab] = useState('reports');
+  const [autoReplyApprovedLang, setAutoReplyApprovedLang] = useState('sv');
+  const [autoReplyDeclinedLang, setAutoReplyDeclinedLang] = useState('sv');
+  const [autoReplyUnclearLang, setAutoReplyUnclearLang] = useState('sv');
   const [form, setForm] = useState({
     email: '',
     role: 'base',
@@ -589,28 +592,40 @@ export function AdminPanel() {
                     <p className="text-xs text-gray-500 mb-3">
                       Variabler: <code>{'{{customer_name}}'}</code>, <code>{'{{ticket_number}}'}</code>, <code>{'{{amount}}'}</code>.
                     </p>
-                    <div className="space-y-3 max-h-[240px] overflow-y-auto pr-2">
-                      {LANGUAGE_OPTIONS.map((lang) => (
-                        <div key={`decision-approved-${lang.code}`} className="space-y-2">
-                          <Label className="block">{lang.label}</Label>
-                          <Input
-                            value={messageSettings.decision_approved_email_subject_by_lang?.[lang.code] || ''}
-                            onChange={(event) => updateSettingField('decision_approved_email_subject_by_lang', lang.code, event.target.value)}
-                            placeholder="E-postämne"
-                          />
-                          <Textarea
-                            value={messageSettings.decision_approved_email_body_by_lang?.[lang.code] || ''}
-                            onChange={(event) => updateSettingField('decision_approved_email_body_by_lang', lang.code, event.target.value)}
-                            className="min-h-[90px]"
-                            placeholder="E-posttext"
-                          />
-                          <Input
-                            value={messageSettings.decision_approved_sms_by_lang?.[lang.code] || ''}
-                            onChange={(event) => updateSettingField('decision_approved_sms_by_lang', lang.code, event.target.value)}
-                            placeholder="SMS-text"
-                          />
-                        </div>
-                      ))}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <Label className="text-sm text-gray-700">Språk</Label>
+                        <Select value={autoReplyApprovedLang} onValueChange={setAutoReplyApprovedLang}>
+                          <SelectTrigger className="w-[220px]">
+                            <SelectValue placeholder="Välj språk" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {LANGUAGE_OPTIONS.map((lang) => (
+                              <SelectItem key={`approved-lang-${lang.code}`} value={lang.code}>
+                                {lang.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Input
+                          value={messageSettings.decision_approved_email_subject_by_lang?.[autoReplyApprovedLang] || ''}
+                          onChange={(event) => updateSettingField('decision_approved_email_subject_by_lang', autoReplyApprovedLang, event.target.value)}
+                          placeholder="E-postämne"
+                        />
+                        <Textarea
+                          value={messageSettings.decision_approved_email_body_by_lang?.[autoReplyApprovedLang] || ''}
+                          onChange={(event) => updateSettingField('decision_approved_email_body_by_lang', autoReplyApprovedLang, event.target.value)}
+                          className="min-h-[90px]"
+                          placeholder="E-posttext"
+                        />
+                        <Input
+                          value={messageSettings.decision_approved_sms_by_lang?.[autoReplyApprovedLang] || ''}
+                          onChange={(event) => updateSettingField('decision_approved_sms_by_lang', autoReplyApprovedLang, event.target.value)}
+                          placeholder="SMS-text"
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -619,28 +634,40 @@ export function AdminPanel() {
                     <p className="text-xs text-gray-500 mb-3">
                       Variabler: <code>{'{{customer_name}}'}</code>, <code>{'{{ticket_number}}'}</code>, <code>{'{{amount}}'}</code>.
                     </p>
-                    <div className="space-y-3 max-h-[240px] overflow-y-auto pr-2">
-                      {LANGUAGE_OPTIONS.map((lang) => (
-                        <div key={`decision-declined-${lang.code}`} className="space-y-2">
-                          <Label className="block">{lang.label}</Label>
-                          <Input
-                            value={messageSettings.decision_declined_email_subject_by_lang?.[lang.code] || ''}
-                            onChange={(event) => updateSettingField('decision_declined_email_subject_by_lang', lang.code, event.target.value)}
-                            placeholder="E-postämne"
-                          />
-                          <Textarea
-                            value={messageSettings.decision_declined_email_body_by_lang?.[lang.code] || ''}
-                            onChange={(event) => updateSettingField('decision_declined_email_body_by_lang', lang.code, event.target.value)}
-                            className="min-h-[90px]"
-                            placeholder="E-posttext"
-                          />
-                          <Input
-                            value={messageSettings.decision_declined_sms_by_lang?.[lang.code] || ''}
-                            onChange={(event) => updateSettingField('decision_declined_sms_by_lang', lang.code, event.target.value)}
-                            placeholder="SMS-text"
-                          />
-                        </div>
-                      ))}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <Label className="text-sm text-gray-700">Språk</Label>
+                        <Select value={autoReplyDeclinedLang} onValueChange={setAutoReplyDeclinedLang}>
+                          <SelectTrigger className="w-[220px]">
+                            <SelectValue placeholder="Välj språk" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {LANGUAGE_OPTIONS.map((lang) => (
+                              <SelectItem key={`declined-lang-${lang.code}`} value={lang.code}>
+                                {lang.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Input
+                          value={messageSettings.decision_declined_email_subject_by_lang?.[autoReplyDeclinedLang] || ''}
+                          onChange={(event) => updateSettingField('decision_declined_email_subject_by_lang', autoReplyDeclinedLang, event.target.value)}
+                          placeholder="E-postämne"
+                        />
+                        <Textarea
+                          value={messageSettings.decision_declined_email_body_by_lang?.[autoReplyDeclinedLang] || ''}
+                          onChange={(event) => updateSettingField('decision_declined_email_body_by_lang', autoReplyDeclinedLang, event.target.value)}
+                          className="min-h-[90px]"
+                          placeholder="E-posttext"
+                        />
+                        <Input
+                          value={messageSettings.decision_declined_sms_by_lang?.[autoReplyDeclinedLang] || ''}
+                          onChange={(event) => updateSettingField('decision_declined_sms_by_lang', autoReplyDeclinedLang, event.target.value)}
+                          placeholder="SMS-text"
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -649,28 +676,40 @@ export function AdminPanel() {
                     <p className="text-xs text-gray-500 mb-3">
                       Variabler: <code>{'{{customer_name}}'}</code>, <code>{'{{ticket_number}}'}</code>.
                     </p>
-                    <div className="space-y-3 max-h-[240px] overflow-y-auto pr-2">
-                      {LANGUAGE_OPTIONS.map((lang) => (
-                        <div key={`decision-unclear-${lang.code}`} className="space-y-2">
-                          <Label className="block">{lang.label}</Label>
-                          <Input
-                            value={messageSettings.decision_unclear_email_subject_by_lang?.[lang.code] || ''}
-                            onChange={(event) => updateSettingField('decision_unclear_email_subject_by_lang', lang.code, event.target.value)}
-                            placeholder="E-postämne"
-                          />
-                          <Textarea
-                            value={messageSettings.decision_unclear_email_body_by_lang?.[lang.code] || ''}
-                            onChange={(event) => updateSettingField('decision_unclear_email_body_by_lang', lang.code, event.target.value)}
-                            className="min-h-[90px]"
-                            placeholder="E-posttext"
-                          />
-                          <Input
-                            value={messageSettings.decision_unclear_sms_by_lang?.[lang.code] || ''}
-                            onChange={(event) => updateSettingField('decision_unclear_sms_by_lang', lang.code, event.target.value)}
-                            placeholder="SMS-text"
-                          />
-                        </div>
-                      ))}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <Label className="text-sm text-gray-700">Språk</Label>
+                        <Select value={autoReplyUnclearLang} onValueChange={setAutoReplyUnclearLang}>
+                          <SelectTrigger className="w-[220px]">
+                            <SelectValue placeholder="Välj språk" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {LANGUAGE_OPTIONS.map((lang) => (
+                              <SelectItem key={`unclear-lang-${lang.code}`} value={lang.code}>
+                                {lang.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Input
+                          value={messageSettings.decision_unclear_email_subject_by_lang?.[autoReplyUnclearLang] || ''}
+                          onChange={(event) => updateSettingField('decision_unclear_email_subject_by_lang', autoReplyUnclearLang, event.target.value)}
+                          placeholder="E-postämne"
+                        />
+                        <Textarea
+                          value={messageSettings.decision_unclear_email_body_by_lang?.[autoReplyUnclearLang] || ''}
+                          onChange={(event) => updateSettingField('decision_unclear_email_body_by_lang', autoReplyUnclearLang, event.target.value)}
+                          className="min-h-[90px]"
+                          placeholder="E-posttext"
+                        />
+                        <Input
+                          value={messageSettings.decision_unclear_sms_by_lang?.[autoReplyUnclearLang] || ''}
+                          onChange={(event) => updateSettingField('decision_unclear_sms_by_lang', autoReplyUnclearLang, event.target.value)}
+                          placeholder="SMS-text"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
