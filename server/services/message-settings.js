@@ -112,6 +112,18 @@ export const DEFAULT_MESSAGE_SETTINGS = {
     sv: 'Vi kan tyvärr inte reparera enheten. Du är välkommen att hämta den i butik. Har du frågor, svara på detta meddelande.',
     en: 'Unfortunately we can’t repair the device. You’re welcome to pick it up at the store. If you have questions, reply to this message.',
   },
+  decision_approved_message_by_lang: {
+    sv: 'Tack för ditt godkännande\n\nTack för förtroendet. Vi återkommer så snart reparationen är klar.',
+    en: 'Thank you for your approval\n\nThanks for your approval. We will contact you as soon as the repair is complete.',
+  },
+  decision_declined_message_by_lang: {
+    sv: 'Information om nekat kostnadsförslag\n\nTråkigt att höra.\n\nHar du frågor kan du kontakta oss på kontakt@recompute.it eller 016-5416700.\n\nVi förbehåller oss rätten att kassera din inlämnade produkt om den inte upphämtas inom 7 dagar från nekat kostnadsförslag.',
+    en: 'Information about declined quote\n\nSorry to hear that.\n\nIf you have questions, contact us at kontakt@recompute.it or 016-5416700.\n\nWe reserve the right to discard uncollected products 7 days after a declined quote.',
+  },
+  decision_unclear_message_by_lang: {
+    sv: 'Bekräfta svar för ärende #{{ticket_number}}\n\nHej {{customer_first_name}},\n\nVi kunde inte tolka ditt senaste svar för ärende #{{ticket_number}}.\nSvara endast med JA för att godkänna kostnadsförslaget eller NEJ för att neka.\n\nTack!',
+    en: 'Please confirm your response for case #{{ticket_number}}\n\nHi {{customer_first_name}},\n\nWe could not interpret your latest response for case #{{ticket_number}}.\nPlease reply with YES to approve the quote or NO to decline.\n\nThank you!',
+  },
   decision_approved_sms_by_lang: {
     sv: 'Tack för förtroendet. Vi återkommer så snart reparationen är klar.',
     en: 'Thanks for your approval. We will contact you as soon as the repair is complete.',
@@ -170,6 +182,9 @@ export const mergeMessageSettings = (raw) => {
     cost_update_prompt_by_lang: mergeByLang('cost_update_prompt_by_lang'),
     ready_prompt_by_lang: mergeByLang('ready_prompt_by_lang'),
     not_repairable_prompt_by_lang: mergeByLang('not_repairable_prompt_by_lang'),
+    decision_approved_message_by_lang: mergeByLang('decision_approved_message_by_lang'),
+    decision_declined_message_by_lang: mergeByLang('decision_declined_message_by_lang'),
+    decision_unclear_message_by_lang: mergeByLang('decision_unclear_message_by_lang'),
     decision_approved_sms_by_lang: mergeByLang('decision_approved_sms_by_lang'),
     decision_approved_email_subject_by_lang: mergeByLang('decision_approved_email_subject_by_lang'),
     decision_approved_email_body_by_lang: mergeByLang('decision_approved_email_body_by_lang'),
@@ -241,6 +256,15 @@ export const autoTranslateMessageSettings = async (settings = {}) => {
       overwriteExisting: true,
     }),
     not_repairable_prompt_by_lang: await fillMissingTranslations(normalized.not_repairable_prompt_by_lang, {
+      overwriteExisting: true,
+    }),
+    decision_approved_message_by_lang: await fillMissingTranslations(normalized.decision_approved_message_by_lang, {
+      overwriteExisting: true,
+    }),
+    decision_declined_message_by_lang: await fillMissingTranslations(normalized.decision_declined_message_by_lang, {
+      overwriteExisting: true,
+    }),
+    decision_unclear_message_by_lang: await fillMissingTranslations(normalized.decision_unclear_message_by_lang, {
       overwriteExisting: true,
     }),
     decision_approved_sms_by_lang: await fillMissingTranslations(normalized.decision_approved_sms_by_lang, {

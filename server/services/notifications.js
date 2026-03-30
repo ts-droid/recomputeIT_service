@@ -113,6 +113,15 @@ const renderMessageSettingTemplate = (template = '', variables = {}) => {
   });
 };
 
+const parseSubjectAndBody = (text = '') => {
+  const normalized = String(text || '').replace(/\r/g, '').trim();
+  if (!normalized) return { subject: '', body: '' };
+  const lines = normalized.split('\n');
+  const subject = (lines[0] || '').trim();
+  const body = lines.slice(1).join('\n').trim();
+  return { subject, body };
+};
+
 const buildDecisionMessageTemplate = async ({ ticket, type, settings }) => {
   const language = getLanguage(ticket);
   const activeSettings = mergeMessageSettings(settings || {});
@@ -128,16 +137,19 @@ const buildDecisionMessageTemplate = async ({ ticket, type, settings }) => {
 
   const map = {
     approved: {
+      unified: activeSettings.decision_approved_message_by_lang,
       sms: activeSettings.decision_approved_sms_by_lang,
       subject: activeSettings.decision_approved_email_subject_by_lang,
       body: activeSettings.decision_approved_email_body_by_lang,
     },
     declined: {
+      unified: activeSettings.decision_declined_message_by_lang,
       sms: activeSettings.decision_declined_sms_by_lang,
       subject: activeSettings.decision_declined_email_subject_by_lang,
       body: activeSettings.decision_declined_email_body_by_lang,
     },
     unclear: {
+      unified: activeSettings.decision_unclear_message_by_lang,
       sms: activeSettings.decision_unclear_sms_by_lang,
       subject: activeSettings.decision_unclear_email_subject_by_lang,
       body: activeSettings.decision_unclear_email_body_by_lang,
@@ -147,9 +159,19 @@ const buildDecisionMessageTemplate = async ({ ticket, type, settings }) => {
   const selected = map[type];
   if (!selected) return { sms: '', subject: '', body: '' };
 
+  const unifiedTemplate = await getLocalizedSetting(selected.unified, language);
   const smsTemplate = await getLocalizedSetting(selected.sms, language);
   const subjectTemplate = await getLocalizedSetting(selected.subject, language);
   const bodyTemplate = await getLocalizedSetting(selected.body, language);
+
+  const unifiedRendered = renderMessageSettingTemplate(unifiedTemplate, variables);
+  if (unifiedRendered) {
+    const parsed = parseSubjectAndBody(unifiedRendered);
+    const subject = parsed.subject;
+    const body = parsed.body || parsed.subject;
+    const sms = parsed.body ? `${parsed.subject}\n${parsed.body}`.trim() : parsed.subject;
+    return { sms, subject, body };
+  }
 
   return {
     sms: renderMessageSettingTemplate(smsTemplate, variables),

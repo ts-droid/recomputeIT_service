@@ -27,45 +27,52 @@ const emptyByLang = () =>
     return acc;
   }, {});
 
-const normalizeSettingsPayload = (data = {}) => ({
-  email_footer_by_lang: { ...emptyByLang(), ...(data?.email_footer_by_lang || {}) },
-  sms_footer_by_lang: { ...emptyByLang(), ...(data?.sms_footer_by_lang || {}) },
-  cost_prompt_by_lang: { ...emptyByLang(), ...(data?.cost_prompt_by_lang || {}) },
-  cost_update_prompt_by_lang: { ...emptyByLang(), ...(data?.cost_update_prompt_by_lang || {}) },
-  ready_prompt_by_lang: { ...emptyByLang(), ...(data?.ready_prompt_by_lang || {}) },
-  not_repairable_prompt_by_lang: { ...emptyByLang(), ...(data?.not_repairable_prompt_by_lang || {}) },
-  decision_approved_sms_by_lang: { ...emptyByLang(), ...(data?.decision_approved_sms_by_lang || {}) },
-  decision_approved_email_subject_by_lang: {
-    ...emptyByLang(),
-    ...(data?.decision_approved_email_subject_by_lang || {}),
-  },
-  decision_approved_email_body_by_lang: {
-    ...emptyByLang(),
-    ...(data?.decision_approved_email_body_by_lang || {}),
-  },
-  decision_declined_sms_by_lang: { ...emptyByLang(), ...(data?.decision_declined_sms_by_lang || {}) },
-  decision_declined_email_subject_by_lang: {
-    ...emptyByLang(),
-    ...(data?.decision_declined_email_subject_by_lang || {}),
-  },
-  decision_declined_email_body_by_lang: {
-    ...emptyByLang(),
-    ...(data?.decision_declined_email_body_by_lang || {}),
-  },
-  decision_unclear_sms_by_lang: { ...emptyByLang(), ...(data?.decision_unclear_sms_by_lang || {}) },
-  decision_unclear_email_subject_by_lang: {
-    ...emptyByLang(),
-    ...(data?.decision_unclear_email_subject_by_lang || {}),
-  },
-  decision_unclear_email_body_by_lang: {
-    ...emptyByLang(),
-    ...(data?.decision_unclear_email_body_by_lang || {}),
-  },
-  ai_reply_assistant_prompt: data?.ai_reply_assistant_prompt || '',
-  ai_message_suggestion_prompt: data?.ai_message_suggestion_prompt || '',
-  ai_work_done_prompt: data?.ai_work_done_prompt || '',
-  chat_default_language: data?.chat_default_language || 'sv',
-});
+const normalizeSettingsPayload = (data = {}) => {
+  const byLang = (key) => ({ ...emptyByLang(), ...(data?.[key] || {}) });
+  const normalized = {
+    email_footer_by_lang: byLang('email_footer_by_lang'),
+    sms_footer_by_lang: byLang('sms_footer_by_lang'),
+    cost_prompt_by_lang: byLang('cost_prompt_by_lang'),
+    cost_update_prompt_by_lang: byLang('cost_update_prompt_by_lang'),
+    ready_prompt_by_lang: byLang('ready_prompt_by_lang'),
+    not_repairable_prompt_by_lang: byLang('not_repairable_prompt_by_lang'),
+    decision_approved_message_by_lang: byLang('decision_approved_message_by_lang'),
+    decision_declined_message_by_lang: byLang('decision_declined_message_by_lang'),
+    decision_unclear_message_by_lang: byLang('decision_unclear_message_by_lang'),
+    // Legacy fields (still accepted by server)
+    decision_approved_sms_by_lang: byLang('decision_approved_sms_by_lang'),
+    decision_approved_email_subject_by_lang: byLang('decision_approved_email_subject_by_lang'),
+    decision_approved_email_body_by_lang: byLang('decision_approved_email_body_by_lang'),
+    decision_declined_sms_by_lang: byLang('decision_declined_sms_by_lang'),
+    decision_declined_email_subject_by_lang: byLang('decision_declined_email_subject_by_lang'),
+    decision_declined_email_body_by_lang: byLang('decision_declined_email_body_by_lang'),
+    decision_unclear_sms_by_lang: byLang('decision_unclear_sms_by_lang'),
+    decision_unclear_email_subject_by_lang: byLang('decision_unclear_email_subject_by_lang'),
+    decision_unclear_email_body_by_lang: byLang('decision_unclear_email_body_by_lang'),
+    ai_reply_assistant_prompt: data?.ai_reply_assistant_prompt || '',
+    ai_message_suggestion_prompt: data?.ai_message_suggestion_prompt || '',
+    ai_work_done_prompt: data?.ai_work_done_prompt || '',
+    chat_default_language: data?.chat_default_language || 'sv',
+  };
+
+  // Backfill unified autosvar from legacy fields if missing (UI convenience).
+  const backfill = (targetKey, legacySubjectKey, legacyBodyKey) => {
+    for (const lang of LANGUAGE_OPTIONS) {
+      const code = lang.code;
+      const current = (normalized[targetKey]?.[code] || '').trim();
+      if (current) continue;
+      const subject = (normalized[legacySubjectKey]?.[code] || '').trim();
+      const body = (normalized[legacyBodyKey]?.[code] || '').trim();
+      const combined = subject && body ? `${subject}\n\n${body}` : subject || body || '';
+      normalized[targetKey][code] = combined;
+    }
+  };
+  backfill('decision_approved_message_by_lang', 'decision_approved_email_subject_by_lang', 'decision_approved_email_body_by_lang');
+  backfill('decision_declined_message_by_lang', 'decision_declined_email_subject_by_lang', 'decision_declined_email_body_by_lang');
+  backfill('decision_unclear_message_by_lang', 'decision_unclear_email_subject_by_lang', 'decision_unclear_email_body_by_lang');
+
+  return normalized;
+};
 
 const formatDuration = (seconds) => {
   if (!seconds || Number.isNaN(seconds)) return '—';
@@ -608,24 +615,17 @@ export function AdminPanel() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="space-y-2">
-                        <Input
-                          value={messageSettings.decision_approved_email_subject_by_lang?.[autoReplyApprovedLang] || ''}
-                          onChange={(event) => updateSettingField('decision_approved_email_subject_by_lang', autoReplyApprovedLang, event.target.value)}
-                          placeholder="E-postämne"
-                        />
-                        <Textarea
-                          value={messageSettings.decision_approved_email_body_by_lang?.[autoReplyApprovedLang] || ''}
-                          onChange={(event) => updateSettingField('decision_approved_email_body_by_lang', autoReplyApprovedLang, event.target.value)}
-                          className="min-h-[90px]"
-                          placeholder="E-posttext"
-                        />
-                        <Input
-                          value={messageSettings.decision_approved_sms_by_lang?.[autoReplyApprovedLang] || ''}
-                          onChange={(event) => updateSettingField('decision_approved_sms_by_lang', autoReplyApprovedLang, event.target.value)}
-                          placeholder="SMS-text"
-                        />
-                      </div>
+                      <Textarea
+                        value={messageSettings.decision_approved_message_by_lang?.[autoReplyApprovedLang] || ''}
+                        onChange={(event) =>
+                          updateSettingField('decision_approved_message_by_lang', autoReplyApprovedLang, event.target.value)
+                        }
+                        className="min-h-[140px]"
+                        placeholder={'Första raden blir ämne i mail.\nResten blir meddelandetext.\n\nEx:\nTack för ditt godkännande\n\nVi återkommer så snart reparationen är klar.'}
+                      />
+                      <p className="text-xs text-gray-500">
+                        För mail används första raden som ämne. För SMS inkluderas första raden i början av meddelandet.
+                      </p>
                     </div>
                   </div>
 
@@ -650,24 +650,17 @@ export function AdminPanel() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="space-y-2">
-                        <Input
-                          value={messageSettings.decision_declined_email_subject_by_lang?.[autoReplyDeclinedLang] || ''}
-                          onChange={(event) => updateSettingField('decision_declined_email_subject_by_lang', autoReplyDeclinedLang, event.target.value)}
-                          placeholder="E-postämne"
-                        />
-                        <Textarea
-                          value={messageSettings.decision_declined_email_body_by_lang?.[autoReplyDeclinedLang] || ''}
-                          onChange={(event) => updateSettingField('decision_declined_email_body_by_lang', autoReplyDeclinedLang, event.target.value)}
-                          className="min-h-[90px]"
-                          placeholder="E-posttext"
-                        />
-                        <Input
-                          value={messageSettings.decision_declined_sms_by_lang?.[autoReplyDeclinedLang] || ''}
-                          onChange={(event) => updateSettingField('decision_declined_sms_by_lang', autoReplyDeclinedLang, event.target.value)}
-                          placeholder="SMS-text"
-                        />
-                      </div>
+                      <Textarea
+                        value={messageSettings.decision_declined_message_by_lang?.[autoReplyDeclinedLang] || ''}
+                        onChange={(event) =>
+                          updateSettingField('decision_declined_message_by_lang', autoReplyDeclinedLang, event.target.value)
+                        }
+                        className="min-h-[140px]"
+                        placeholder={'Första raden blir ämne i mail.\nResten blir meddelandetext.'}
+                      />
+                      <p className="text-xs text-gray-500">
+                        För mail används första raden som ämne. För SMS inkluderas första raden i början av meddelandet.
+                      </p>
                     </div>
                   </div>
 
@@ -692,24 +685,17 @@ export function AdminPanel() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="space-y-2">
-                        <Input
-                          value={messageSettings.decision_unclear_email_subject_by_lang?.[autoReplyUnclearLang] || ''}
-                          onChange={(event) => updateSettingField('decision_unclear_email_subject_by_lang', autoReplyUnclearLang, event.target.value)}
-                          placeholder="E-postämne"
-                        />
-                        <Textarea
-                          value={messageSettings.decision_unclear_email_body_by_lang?.[autoReplyUnclearLang] || ''}
-                          onChange={(event) => updateSettingField('decision_unclear_email_body_by_lang', autoReplyUnclearLang, event.target.value)}
-                          className="min-h-[90px]"
-                          placeholder="E-posttext"
-                        />
-                        <Input
-                          value={messageSettings.decision_unclear_sms_by_lang?.[autoReplyUnclearLang] || ''}
-                          onChange={(event) => updateSettingField('decision_unclear_sms_by_lang', autoReplyUnclearLang, event.target.value)}
-                          placeholder="SMS-text"
-                        />
-                      </div>
+                      <Textarea
+                        value={messageSettings.decision_unclear_message_by_lang?.[autoReplyUnclearLang] || ''}
+                        onChange={(event) =>
+                          updateSettingField('decision_unclear_message_by_lang', autoReplyUnclearLang, event.target.value)
+                        }
+                        className="min-h-[140px]"
+                        placeholder={'Första raden blir ämne i mail.\nResten blir meddelandetext.'}
+                      />
+                      <p className="text-xs text-gray-500">
+                        För mail används första raden som ämne. För SMS inkluderas första raden i början av meddelandet.
+                      </p>
                     </div>
                   </div>
                 </div>
