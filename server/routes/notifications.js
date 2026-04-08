@@ -149,7 +149,7 @@ const sendNotification = async ({ ticket, channel, message, translatedSubject, t
 // ---------------------------------------------------------------------------
 router.post('/notify/cost-proposal', requireAuth, requireRole('base'), requireTenant, async (req, res) => {
   try {
-    const { ticketId, channel, language: requestedLanguage, templateType: clientTemplateType } = req.body || {};
+    const { ticketId, channel, language: requestedLanguage, templateType: clientTemplateType, customSubject, customBody } = req.body || {};
     const { rows } = await query('SELECT * FROM service_tickets WHERE id = $1 AND tenant_id = $2', [ticketId, req.tenantId]);
     const ticket = rows[0];
     if (!ticket) return res.status(404).json({ error: 'Ärende hittades inte.' });
@@ -169,15 +169,18 @@ router.post('/notify/cost-proposal', requireAuth, requireRole('base'), requireTe
       settings: messageSettings,
       replyToken,
     });
+    const finalSubject = customSubject?.trim() || preview.subject;
+    const finalBody = customBody?.trim() || preview.body;
+    const finalSms = customBody?.trim() || preview.sms;
     const sender = req.user?.email || 'okänd';
 
     const result = await sendNotification({
       ticket,
       channel,
-      message: preview.sms,
-      translatedSubject: preview.subject,
-      translatedBody: preview.body,
-      html: preview.html,
+      message: finalSms,
+      translatedSubject: finalSubject,
+      translatedBody: finalBody,
+      html: buildEmailHtml(appendReplyGuidance(finalBody, language, replyToken)),
       replyToken,
       sender,
       tenantId: req.tenantId,
@@ -213,7 +216,7 @@ router.post('/notify/cost-proposal', requireAuth, requireRole('base'), requireTe
 // ---------------------------------------------------------------------------
 router.post('/notify/repair-ready', requireAuth, requireRole('base'), requireTenant, async (req, res) => {
   try {
-    const { ticketId, channel, language: requestedLanguage } = req.body || {};
+    const { ticketId, channel, language: requestedLanguage, customSubject, customBody } = req.body || {};
     const { rows } = await query('SELECT * FROM service_tickets WHERE id = $1 AND tenant_id = $2', [ticketId, req.tenantId]);
     const ticket = rows[0];
     if (!ticket) return res.status(404).json({ error: 'Ärende hittades inte.' });
@@ -232,15 +235,18 @@ router.post('/notify/repair-ready', requireAuth, requireRole('base'), requireTen
       settings: messageSettings,
       replyToken,
     });
+    const finalSubject = customSubject?.trim() || preview.subject;
+    const finalBody = customBody?.trim() || preview.body;
+    const finalSms = customBody?.trim() || preview.sms;
     const sender = req.user?.email || 'okänd';
 
     const result = await sendNotification({
       ticket,
       channel,
-      message: preview.sms,
-      translatedSubject: preview.subject,
-      translatedBody: preview.body,
-      html: preview.html,
+      message: finalSms,
+      translatedSubject: finalSubject,
+      translatedBody: finalBody,
+      html: buildEmailHtml(appendReplyGuidance(finalBody, language, replyToken)),
       replyToken,
       sender,
       tenantId: req.tenantId,
@@ -277,7 +283,7 @@ router.post('/notify/repair-ready', requireAuth, requireRole('base'), requireTen
 // ---------------------------------------------------------------------------
 router.post('/notify/not-repairable', requireAuth, requireRole('base'), requireTenant, async (req, res) => {
   try {
-    const { ticketId, channel, language: requestedLanguage } = req.body || {};
+    const { ticketId, channel, language: requestedLanguage, customSubject, customBody } = req.body || {};
     const { rows } = await query('SELECT * FROM service_tickets WHERE id = $1 AND tenant_id = $2', [ticketId, req.tenantId]);
     const ticket = rows[0];
     if (!ticket) return res.status(404).json({ error: 'Ärende hittades inte.' });
@@ -296,15 +302,18 @@ router.post('/notify/not-repairable', requireAuth, requireRole('base'), requireT
       settings: messageSettings,
       replyToken,
     });
+    const finalSubject = customSubject?.trim() || preview.subject;
+    const finalBody = customBody?.trim() || preview.body;
+    const finalSms = customBody?.trim() || preview.sms;
     const sender = req.user?.email || 'okänd';
 
     const result = await sendNotification({
       ticket,
       channel,
-      message: preview.sms,
-      translatedSubject: preview.subject,
-      translatedBody: preview.body,
-      html: preview.html,
+      message: finalSms,
+      translatedSubject: finalSubject,
+      translatedBody: finalBody,
+      html: buildEmailHtml(appendReplyGuidance(finalBody, language, replyToken)),
       replyToken,
       sender,
       tenantId: req.tenantId,

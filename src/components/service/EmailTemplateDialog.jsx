@@ -43,6 +43,9 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
   const [previewContent, setPreviewContent] = useState({ subject: '', body: '' });
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState('');
+  const [editedSubject, setEditedSubject] = useState('');
+  const [editedBody, setEditedBody] = useState('');
+  const [hasManualEdit, setHasManualEdit] = useState(false);
   const { toast } = useToast();
 
   const isCostProposal = templateType === 'kostnadsforslag' || templateType === 'kostnadsforslag_uppdatering';
@@ -125,12 +128,27 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
 
   const canFallbackToLocal =
     currentLang === 'sv' || !requireStrictTranslatedPreview || !previewError;
-  const effectiveSubject = canFallbackToLocal
+  const generatedSubject = canFallbackToLocal
     ? (previewContent.subject || emailContent?.subject || '')
     : '';
-  const effectiveBody = canFallbackToLocal
+  const generatedBody = canFallbackToLocal
     ? (previewContent.body || emailContent?.body || '')
     : '';
+
+  // Sync generated preview into editable fields (only when not manually edited)
+  useEffect(() => {
+    if (!hasManualEdit) {
+      setEditedSubject(generatedSubject);
+      setEditedBody(generatedBody);
+    }
+  }, [generatedSubject, generatedBody, hasManualEdit]);
+
+  // Reset manual edit flag when dialog opens or template changes
+  useEffect(() => {
+    if (open) {
+      setHasManualEdit(false);
+    }
+  }, [open, templateType]);
 
   const sendNotification = async (channel) => {
     if (!ticket || !templateType) return;
@@ -166,6 +184,8 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
           channel,
           language: currentLang,
           ...(isCostProposalUpdate && { templateType: 'kostnadsforslag_uppdatering' }),
+          ...(hasManualEdit && editedSubject && { customSubject: editedSubject }),
+          ...(hasManualEdit && editedBody && { customBody: editedBody }),
         }),
       });
 
@@ -315,7 +335,7 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
           </div>
         )}
 
-        <div className="bg-gray-100 p-4 rounded-md space-y-4 max-h-80 overflow-y-auto border border-gray-200">
+        <div className="bg-gray-100 p-4 rounded-md space-y-4 border border-gray-200">
           {previewError && currentLang !== 'sv' && requireStrictTranslatedPreview && (
             <p className="text-sm text-red-600">
               Förhandsvisning kunde inte översättas: {previewError}
@@ -323,11 +343,19 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
           )}
           <div>
             <Label className="font-semibold text-gray-800">Ämne</Label>
-            <p className="text-sm bg-white p-2 rounded-md mt-1">{effectiveSubject}</p>
+            <Input
+              value={editedSubject}
+              onChange={(e) => { setEditedSubject(e.target.value); setHasManualEdit(true); }}
+              className="mt-1 bg-white"
+            />
           </div>
           <div>
             <Label className="font-semibold text-gray-800">Meddelande</Label>
-            <div className="text-sm bg-white p-3 rounded-md mt-1 whitespace-pre-wrap">{effectiveBody}</div>
+            <Textarea
+              value={editedBody}
+              onChange={(e) => { setEditedBody(e.target.value); setHasManualEdit(true); }}
+              className="mt-1 bg-white min-h-[150px] whitespace-pre-wrap"
+            />
           </div>
         </div>
 
