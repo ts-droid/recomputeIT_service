@@ -30,6 +30,12 @@ export const textTemplates = {
     en: (ticket) =>
       `Hi ${getFirstName(ticket.customer_name)}!\nWe have checked your ${ticket.device_type}${ticket.device_model ? ` ${ticket.device_model}` : ''} (case #${ticket.ticket_number}), but unfortunately we can’t repair the device.\nYou’re welcome to pick it up at the store.\nIf you have questions, reply to this message.`,
   },
+  pickupReminder: {
+    sv: (ticket) =>
+      `Hej ${getFirstName(ticket.customer_name)}!\nPåminnelse: Din enhet för ärende #${ticket.ticket_number} väntar på upphämtning hos oss.\n${ticket.final_cost ? `Slutlig kostnad: ${ticket.final_cost} kr.\n` : ''}Välkommen in!`,
+    en: (ticket) =>
+      `Hi ${getFirstName(ticket.customer_name)}!\nReminder: Your device for case #${ticket.ticket_number} is waiting for pickup.\n${ticket.final_cost ? `Final cost: ${ticket.final_cost} SEK.\n` : ''}Welcome in!`,
+  },
 };
 
 export const emailTemplates = {
@@ -83,6 +89,26 @@ export const emailTemplates = {
         `If you have questions, reply to this message.\n\n` +
         `Best regards,\n` +
         `Your Service Team`,
+    }),
+  },
+  pickupReminder: {
+    sv: (ticket) => ({
+      subject: `Påminnelse: Din enhet väntar på upphämtning (#${ticket.ticket_number})`,
+      body:
+        `Hej ${getFirstName(ticket.customer_name)},\n\n` +
+        `Detta är en påminnelse om att din enhet för ärende #${ticket.ticket_number} är klar och väntar på upphämtning hos oss.\n\n` +
+        `${ticket.final_cost ? `Slutlig kostnad: ${ticket.final_cost} kr.\n\n` : ''}` +
+        `Välkommen in!\n\n` +
+        `Har du frågor kan du svara på detta meddelande.`,
+    }),
+    en: (ticket) => ({
+      subject: `Reminder: Your device is waiting for pickup (#${ticket.ticket_number})`,
+      body:
+        `Hi ${getFirstName(ticket.customer_name)},\n\n` +
+        `This is a friendly reminder that your device for case #${ticket.ticket_number} is ready and waiting for pickup.\n\n` +
+        `${ticket.final_cost ? `Final cost: ${ticket.final_cost} SEK.\n\n` : ''}` +
+        `Welcome in!\n\n` +
+        `If you have any questions, feel free to reply to this message.`,
     }),
   },
 };

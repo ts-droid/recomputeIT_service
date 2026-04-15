@@ -1173,6 +1173,16 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets, onDelete, tenant
                            </p>
 
                            <Button
+                             onClick={() => handleNotify('pickupReminder')}
+                             variant="outline"
+                             className="w-full border-orange-300 text-orange-700 hover:bg-orange-50 gap-2"
+                             disabled={!canEdit || (!ticket.customer_email && !ticket.customer_phone)}
+                           >
+                             <MessageSquare size={16} />
+                             Skicka påminnelse om upphämtning
+                           </Button>
+
+                           <Button
                              onClick={handleToggleHidden}
                              variant="outline"
                              className="w-full"

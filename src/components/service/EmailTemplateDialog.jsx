@@ -51,6 +51,7 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
   const isCostProposal = templateType === 'kostnadsforslag' || templateType === 'kostnadsforslag_uppdatering';
   const isCostProposalUpdate = templateType === 'kostnadsforslag_uppdatering';
   const isNotRepairable = templateType === 'ejReparerbar';
+  const isPickupReminder = templateType === 'pickupReminder';
   const requireStrictTranslatedPreview = templateType === 'reparationFardig';
   const placeholderText = translationPlaceholders[currentLang] || translationPlaceholders.sv;
 
@@ -171,7 +172,9 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
         ? '/api/notify/cost-proposal'
         : isNotRepairable
           ? '/api/notify/not-repairable'
-          : '/api/notify/repair-ready';
+          : isPickupReminder
+            ? '/api/notify/pickup-reminder'
+            : '/api/notify/repair-ready';
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -264,7 +267,9 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
                 ? 'Underlag för kostnadsförslag'
                 : isNotRepairable
                   ? 'Meddelande: kan ej reparera'
-                  : 'Meddelande till kund'}
+                  : isPickupReminder
+                    ? 'Påminnelse: hämta upp enhet'
+                    : 'Meddelande till kund'}
           </DialogTitle>
           <DialogDescription>
             {isCostProposalUpdate
@@ -273,7 +278,9 @@ export const EmailTemplateDialog = ({ open, onOpenChange, ticket, onUpdate, temp
               ? 'Granska, kopiera och skicka detta kostnadsförslag till kunden.'
               : isNotRepairable
                 ? 'Granska och skicka meddelande om att enheten inte går att reparera.'
-                : 'Granska, kopiera och skicka meddelande om färdig reparation.'}
+                : isPickupReminder
+                  ? 'Granska och skicka en påminnelse till kunden om att enheten väntar på upphämtning.'
+                  : 'Granska, kopiera och skicka meddelande om färdig reparation.'}
           </DialogDescription>
         </DialogHeader>
 

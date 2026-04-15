@@ -309,6 +309,22 @@ const buildNotificationPreview = async ({ templateType, ticket, language, settin
     return { subject, body, display_body: stripReplySystemLines(body), html: buildEmailHtml(body), sms };
   }
 
+  if (templateType === 'pickupReminder') {
+    const messageBase =
+      textTemplates.pickupReminder?.[language]?.(localizedTicket) ||
+      textTemplates.pickupReminder?.sv(localizedTicket);
+    let sms = await translateIfNeeded(messageBase, language);
+    const template =
+      emailTemplates.pickupReminder?.[language]?.(localizedTicket) ||
+      emailTemplates.pickupReminder?.sv(localizedTicket);
+    const subject = await translateIfNeeded(template.subject, language);
+    let body = await translateIfNeeded(template.body, language);
+    body = appendUniqueBlock(body, emailFooter);
+    body = appendReplyGuidance(body, language, replyToken);
+    sms = appendUniqueBlock(sms, smsFooter);
+    return { subject, body, display_body: stripReplySystemLines(body), html: buildEmailHtml(body), sms };
+  }
+
   if (templateType === 'ejReparerbar') {
     const messageBase =
       textTemplates.notRepairable?.[language]?.(localizedTicket) ||

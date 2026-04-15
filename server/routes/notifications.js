@@ -359,4 +359,74 @@ router.post('/notify/not-repairable', requireAuth, requireRole('base'), requireT
   }
 });
 
+// ---------------------------------------------------------------------------
+// POST /notify/pickup-reminder
+// Send a pickup reminder to the customer without changing ticket status.
+// ---------------------------------------------------------------------------
+router.post('/notify/pickup-reminder', requireAuth, requireRole('base'), requireTenant, async (req, res) => {
+  try {
+    const { ticketId, channel, language: requestedLanguage, customSubject, customBody } = req.body || {};
+    const { rows } = await query('SELECT * FROM service_tickets WHERE id = $1 AND tenant_id = $2', [ticketId, req.tenantId]);
+    const ticket = rows[0];
+    if (!ticket) return res.status(404).json({ error: 'Ärende hittades inte.' });
+
+    const language = requestedLanguage || getLanguage(ticket);
+    const replyToken = generateReplyToken();
+    if (requestedLanguage && requestedLanguage !== ticket.disclaimer_language) {
+      await query(`UPDATE service_tickets SET disclaimer_language = $1 WHERE id = $2`, [requestedLanguage, ticket.id]);
+    }
+    const localizedTicket = await localizeTicketFreeText(ticket, language, { strict: language !== 'sv' });
+    const messageSettings = await getAdminMessageSettings(req.tenantId);
+    const preview = await buildNotificationPreview({
+      templateType: 'pickupReminder',
+      ticket: localizedTicket,
+      language,
+      settings: messageSettings,
+      replyToken,
+    });
+    const customBodyTrimmed = customBody?.trim();
+    const finalSubject = customSubject?.trim() || preview.subject;
+    const finalBody = customBodyTrimmed
+      ? appendReplyGuidance(customBodyTrimmed, language, replyToken)
+      : preview.body;
+    const finalHtml = customBodyTrimmed ? buildEmailHtml(finalBody) : preview.html;
+    const finalSms = customBodyTrimmed || preview.sms;
+    const sender = req.user?.email || 'okänd';
+
+    const result = await sendNotification({
+      ticket,
+      channel,
+      message: finalSms,
+      translatedSubject: finalSubject,
+      translatedBody: finalBody,
+      html: finalHtml,
+      replyToken,
+      sender,
+      tenantId: req.tenantId,
+    });
+
+    if (result.error) {
+      return res.status(result.status).json({ error: result.error, details: result.details });
+    }
+
+    const sentChannels =
+      result.sms_sent && result.email_sent ? 'sms+email' : result.sms_sent ? 'sms' : 'email';
+
+    // Do NOT change status - ticket remains "Färdig"
+    await query(
+      `UPDATE service_tickets
+       SET last_staff_contact_at = NOW(),
+           last_staff_contact_by = $2,
+           last_staff_contact_channel = $3
+       WHERE id = $1`,
+      [ticket.id, sender, sentChannels]
+    );
+
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    console.error('POST /api/notify/pickup-reminder error:', error);
+    res.status(500).json({ error: 'Kunde inte skicka påminnelse.' });
+  }
+});
+
 export default router;
