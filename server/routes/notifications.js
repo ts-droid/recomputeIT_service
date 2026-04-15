@@ -169,9 +169,13 @@ router.post('/notify/cost-proposal', requireAuth, requireRole('base'), requireTe
       settings: messageSettings,
       replyToken,
     });
+    const customBodyTrimmed = customBody?.trim();
     const finalSubject = customSubject?.trim() || preview.subject;
-    const finalBody = customBody?.trim() || preview.body;
-    const finalSms = customBody?.trim() || preview.sms;
+    const finalBody = customBodyTrimmed
+      ? appendReplyGuidance(customBodyTrimmed, language, replyToken)
+      : preview.body;
+    const finalHtml = customBodyTrimmed ? buildEmailHtml(finalBody) : preview.html;
+    const finalSms = customBodyTrimmed || preview.sms;
     const sender = req.user?.email || 'okänd';
 
     const result = await sendNotification({
@@ -180,7 +184,7 @@ router.post('/notify/cost-proposal', requireAuth, requireRole('base'), requireTe
       message: finalSms,
       translatedSubject: finalSubject,
       translatedBody: finalBody,
-      html: buildEmailHtml(appendReplyGuidance(finalBody, language, replyToken)),
+      html: finalHtml,
       replyToken,
       sender,
       tenantId: req.tenantId,
@@ -235,9 +239,13 @@ router.post('/notify/repair-ready', requireAuth, requireRole('base'), requireTen
       settings: messageSettings,
       replyToken,
     });
+    const customBodyTrimmed = customBody?.trim();
     const finalSubject = customSubject?.trim() || preview.subject;
-    const finalBody = customBody?.trim() || preview.body;
-    const finalSms = customBody?.trim() || preview.sms;
+    const finalBody = customBodyTrimmed
+      ? appendReplyGuidance(customBodyTrimmed, language, replyToken)
+      : preview.body;
+    const finalHtml = customBodyTrimmed ? buildEmailHtml(finalBody) : preview.html;
+    const finalSms = customBodyTrimmed || preview.sms;
     const sender = req.user?.email || 'okänd';
 
     const result = await sendNotification({
@@ -246,7 +254,7 @@ router.post('/notify/repair-ready', requireAuth, requireRole('base'), requireTen
       message: finalSms,
       translatedSubject: finalSubject,
       translatedBody: finalBody,
-      html: buildEmailHtml(appendReplyGuidance(finalBody, language, replyToken)),
+      html: finalHtml,
       replyToken,
       sender,
       tenantId: req.tenantId,
@@ -302,9 +310,13 @@ router.post('/notify/not-repairable', requireAuth, requireRole('base'), requireT
       settings: messageSettings,
       replyToken,
     });
+    const customBodyTrimmed = customBody?.trim();
     const finalSubject = customSubject?.trim() || preview.subject;
-    const finalBody = customBody?.trim() || preview.body;
-    const finalSms = customBody?.trim() || preview.sms;
+    const finalBody = customBodyTrimmed
+      ? appendReplyGuidance(customBodyTrimmed, language, replyToken)
+      : preview.body;
+    const finalHtml = customBodyTrimmed ? buildEmailHtml(finalBody) : preview.html;
+    const finalSms = customBodyTrimmed || preview.sms;
     const sender = req.user?.email || 'okänd';
 
     const result = await sendNotification({
@@ -313,7 +325,7 @@ router.post('/notify/not-repairable', requireAuth, requireRole('base'), requireT
       message: finalSms,
       translatedSubject: finalSubject,
       translatedBody: finalBody,
-      html: buildEmailHtml(appendReplyGuidance(finalBody, language, replyToken)),
+      html: finalHtml,
       replyToken,
       sender,
       tenantId: req.tenantId,
