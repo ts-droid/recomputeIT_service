@@ -35,6 +35,23 @@ const resendWebhookVerifier = RESEND_WEBHOOK_SECRET ? new SvixWebhook(RESEND_WEB
 const router = Router();
 
 // ---------------------------------------------------------------------------
+// Auto-decision gating
+// ---------------------------------------------------------------------------
+// We only run YES/NO approval parsing — and the resulting auto-replies
+// ("Tack för ditt godkännande" / "Bekräfta svar för ärende") — when the
+// ticket is actively waiting for a cost-proposal decision. Otherwise an
+// unrelated reply (e.g. customer saying "ja, jag hämtar imorgon" after we've
+// said the device can't be repaired) gets misclassified and triggers a
+// nonsensical auto-reply chain.
+const isAwaitingCostDecision = (ticket) => {
+  if (!ticket) return false;
+  if (ticket.not_repairable) return false;
+  if (ticket.status === 'Avslutad' || ticket.status === 'Färdig') return false;
+  if (ticket.status === 'Kostnadsförslag godkänt' || ticket.status === 'Kostnadsförslag nekat') return false;
+  return ticket.status === 'Väntar på kund';
+};
+
+// ---------------------------------------------------------------------------
 // POST /email-inbound
 // ---------------------------------------------------------------------------
 router.post('/email-inbound', async (req, res) => {
@@ -177,6 +194,22 @@ router.post('/email-inbound', async (req, res) => {
       ]
     );
 
+    // Skip approval parsing entirely when the ticket isn't waiting for a
+    // cost-proposal decision. Just record that the customer wrote something
+    // so staff can see it, and return without sending any auto-reply.
+    if (!isAwaitingCostDecision(ticket)) {
+      await query(
+        `UPDATE service_tickets
+         SET has_new_customer_message = TRUE,
+             last_customer_response_text = $2,
+             last_customer_response_channel = 'email',
+             last_customer_response_at = NOW()
+         WHERE id = $1`,
+        [ticket.id, inboundReplyText]
+      );
+      return res.json({ ok: true, matched: true, ticket_number: ticket.ticket_number, decision: null, skipped: 'not_awaiting_decision' });
+    }
+
     let decision = await parseApprovalDecision(inboundReplyText);
     if (!decision && !inbound.text && req.rawBody) {
       const fallbackSnippet = extractReplySnippetFromRawWebhook(req.rawBody);
@@ -314,6 +347,23 @@ router.post('/46elks', async (req, res) => {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [tenantId, ticket.id, 'sms', 'inbound', from, messageWithSwedish, '46elks', providerId]
     );
+
+    // Skip approval parsing when ticket isn't actively waiting for a
+    // cost-proposal decision. Record the message and return without
+    // triggering "Tack för ditt godkännande" or clarification auto-replies.
+    if (!isAwaitingCostDecision(ticket)) {
+      await client.query(
+        `UPDATE service_tickets
+         SET has_new_customer_message = TRUE,
+             last_customer_response_text = $2,
+             last_customer_response_channel = 'sms',
+             last_customer_response_at = NOW()
+         WHERE id = $1`,
+        [ticket.id, message]
+      );
+      await client.query('COMMIT');
+      return res.json({ ok: true, decision: null, skipped: 'not_awaiting_decision' });
+    }
 
     const decision = await parseApprovalDecision(message);
     console.log('46elks inbound decision parsed', { ticketId: ticket.id, rawMessage: message, decision, providerId });
