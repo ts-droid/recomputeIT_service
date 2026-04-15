@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { query } from '../db.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { requireTenant } from '../middleware/tenant.js';
-import { getLanguage, resolvePreferredContactChannel } from '../services/phone.js';
+import { getLanguage } from '../services/phone.js';
 import { translateIfNeeded } from '../services/translation.js';
 import { generateReplyToken, stripReplySystemLines, buildEmailHtml, appendReplyGuidance } from '../services/email-parsing.js';
 import { sendEmail } from '../services/email.js';
@@ -119,12 +119,13 @@ const sendNotification = async ({ ticket, channel, message, translatedSubject, t
     if (!ticket.customer_phone && !ticket.customer_email) {
       return { error: 'Varken telefonnummer eller e-post finns registrerat.', status: 400 };
     }
-    const preferred = resolvePreferredContactChannel(ticket);
-    const trySmsFirst = preferred === 'sms' || (preferred !== 'email' && ticket.customer_phone && !ticket.customer_email);
-
-    if (trySmsFirst && ticket.customer_phone) await trySms();
-    if (!delivery.sms_sent && ticket.customer_email) await tryEmail();
-    if (!trySmsFirst && !delivery.email_sent && ticket.customer_phone) await trySms();
+    // Send to ALL available channels in parallel — the frontend promises
+    // "alla tillgängliga kontaktvägar (SMS/e-post)" and toast copy already
+    // reports "SMS och e-post skickades".
+    const tasks = [];
+    if (ticket.customer_phone) tasks.push(trySms());
+    if (ticket.customer_email) tasks.push(tryEmail());
+    await Promise.all(tasks);
 
     if (!delivery.sms_sent && !delivery.email_sent) {
       return { error: 'Kunde inte skicka.', details: delivery.warnings.join(' ') || 'Både SMS och e-post misslyckades.', status: 500 };

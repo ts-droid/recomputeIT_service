@@ -43,15 +43,15 @@ export const REPLY_HINT_BY_LANGUAGE = {
 };
 
 export const REPLY_DIRECT_BY_LANGUAGE = {
-  sv: 'Du kan svara direkt på detta mejl.',
-  en: 'You can reply directly to this email.',
-  ar: 'يمكنك الرد مباشرة على هذا البريد الإلكتروني.',
-  es: 'Puede responder directamente a este correo electrónico.',
-  fi: 'Voit vastata tähän sähköpostiin suoraan.',
-  ku: 'Tu dikarî rasterast bersiva vê e-nameyê bidî.',
-  tr: 'Bu e-postayı doğrudan yanıtlayabilirsiniz.',
-  pl: 'Możesz odpowiedzieć bezpośrednio na tę wiadomość e-mail.',
-  uk: 'Ви можете відповісти безпосередньо на цей електронний лист.',
+  sv: 'Du kan svara direkt på detta meddelande.',
+  en: 'You can reply directly to this message.',
+  ar: 'يمكنك الرد مباشرة على هذه الرسالة.',
+  es: 'Puede responder directamente a este mensaje.',
+  fi: 'Voit vastata tähän viestiin suoraan.',
+  ku: 'Tu dikarî rasterast bersiva vê peyamê bidî.',
+  tr: 'Bu mesajı doğrudan yanıtlayabilirsiniz.',
+  pl: 'Możesz odpowiedzieć bezpośrednio na tę wiadomość.',
+  uk: 'Ви можете відповісти безпосередньо на це повідомлення.',
 };
 
 // ---------------------------------------------------------------------------

@@ -970,6 +970,34 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets, onDelete, tenant
                              <DollarSign size={16} />
                              Skicka kostnadsförslag till kund
                            </Button>
+                           <Button
+                             variant="outline"
+                             className="w-full border-gray-300 text-gray-700 hover:bg-gray-50 gap-2"
+                             onClick={async () => {
+                               const updates = {
+                                 status: 'Kostnadsförslag godkänt',
+                                 cost_proposal_approved: true,
+                               };
+                               if (plannedActions && !workDoneSummary) {
+                                 updates.work_done_summary = plannedActions;
+                               }
+                               if (costProposal && !finalCost) {
+                                 updates.final_cost = costProposal;
+                               }
+                               await onUpdate(ticket.id, updates);
+                               toast({
+                                 title: 'Kostnadsförslag hoppas över',
+                                 description: 'Ärendet går vidare till arbete pågår. Kostnad antas vara överenskommen muntligt.',
+                               });
+                             }}
+                             disabled={!canEdit}
+                           >
+                             <CheckCircle2 size={16} />
+                             Hoppa över — kostnad överenskommen muntligt
+                           </Button>
+                           <p className="text-xs text-gray-500 text-center">
+                             Använd om du har kommit överens om kostnad med kunden via telefon eller på plats.
+                           </p>
                          </div>
                        )}
 

@@ -113,6 +113,18 @@ const renderMessageSettingTemplate = (template = '', variables = {}) => {
   });
 };
 
+// Heuristic: detect whether an admin-configured prompt is a full standalone
+// message (starts with a greeting) rather than a short instructional addendum.
+// If so, it should REPLACE the hardcoded email body to avoid duplication.
+const looksLikeFullMessage = (text = '') => {
+  const trimmed = String(text || '').trim();
+  if (!trimmed) return false;
+  // Matches greetings in all supported languages
+  return /^(hej\b|hi\b|hello\b|hola\b|hei\b|merhaba\b|cześć\b|czesc\b|привіт\b|merhaba\b|سلام\b|مرحبا\b|mrahba\b|slav\b)/i.test(
+    trimmed
+  );
+};
+
 const parseSubjectAndBody = (text = '') => {
   const normalized = String(text || '').replace(/\r/g, '').trim();
   if (!normalized) return { subject: '', body: '' };
@@ -283,6 +295,23 @@ const buildNotificationPreview = async ({ templateType, ticket, language, settin
     final_cost: localizedTicket.final_cost || '',
   };
 
+  // Compose email body by combining hardcoded template with admin-configurable prompt.
+  // If the admin prompt looks like a full message (starts with a greeting), it
+  // REPLACES the hardcoded body to avoid duplication. Otherwise it's appended.
+  const composeEmailBody = async ({ hardcodedBody, renderedAdminPrompt }) => {
+    if (looksLikeFullMessage(renderedAdminPrompt)) {
+      let body = renderedAdminPrompt;
+      body = appendUniqueBlock(body, emailFooter); // dedupes if already signed
+      body = appendReplyGuidance(body, language, replyToken);
+      return body;
+    }
+    let body = await translateIfNeeded(hardcodedBody, language);
+    if (renderedAdminPrompt) body = appendUniqueBlock(body, renderedAdminPrompt);
+    body = appendUniqueBlock(body, emailFooter);
+    body = appendReplyGuidance(body, language, replyToken);
+    return body;
+  };
+
   if (templateType === 'kostnadsforslag' || templateType === 'kostnadsforslag_uppdatering') {
     const isUpdate = templateType === 'kostnadsforslag_uppdatering';
     const amount = ticket.final_cost || '—';
@@ -300,11 +329,9 @@ const buildNotificationPreview = async ({ templateType, ticket, language, settin
       emailTemplates.costProposal[language]?.(localizedTicket, amount) ||
       emailTemplates.costProposal.sv(localizedTicket, amount);
     const subject = await translateIfNeeded(template.subject, language);
-    let body = await translateIfNeeded(template.body, language);
     const localizedCostPrompt = await getLocalizedSetting(activeSettings[promptKey] || activeSettings.cost_prompt_by_lang, language);
-    body = appendUniqueBlock(body, renderMessageSettingTemplate(localizedCostPrompt, commonVariables));
-    body = appendUniqueBlock(body, emailFooter);
-    body = appendReplyGuidance(body, language, replyToken);
+    const renderedAdminPrompt = renderMessageSettingTemplate(localizedCostPrompt, commonVariables);
+    const body = await composeEmailBody({ hardcodedBody: template.body, renderedAdminPrompt });
     sms = appendUniqueBlock(sms, smsFooter);
     return { subject, body, display_body: stripReplySystemLines(body), html: buildEmailHtml(body), sms };
   }
@@ -318,9 +345,8 @@ const buildNotificationPreview = async ({ templateType, ticket, language, settin
       emailTemplates.pickupReminder?.[language]?.(localizedTicket) ||
       emailTemplates.pickupReminder?.sv(localizedTicket);
     const subject = await translateIfNeeded(template.subject, language);
-    let body = await translateIfNeeded(template.body, language);
-    body = appendUniqueBlock(body, emailFooter);
-    body = appendReplyGuidance(body, language, replyToken);
+    // pickupReminder has no admin prompt today — pass empty string.
+    const body = await composeEmailBody({ hardcodedBody: template.body, renderedAdminPrompt: '' });
     sms = appendUniqueBlock(sms, smsFooter);
     return { subject, body, display_body: stripReplySystemLines(body), html: buildEmailHtml(body), sms };
   }
@@ -334,11 +360,9 @@ const buildNotificationPreview = async ({ templateType, ticket, language, settin
       emailTemplates.notRepairable?.[language]?.(localizedTicket) ||
       emailTemplates.notRepairable?.sv(localizedTicket);
     const subject = await translateIfNeeded(template.subject, language);
-    let body = await translateIfNeeded(template.body, language);
     const localizedPrompt = await getLocalizedSetting(activeSettings.not_repairable_prompt_by_lang, language);
-    body = appendUniqueBlock(body, renderMessageSettingTemplate(localizedPrompt, commonVariables));
-    body = appendUniqueBlock(body, emailFooter);
-    body = appendReplyGuidance(body, language, replyToken);
+    const renderedAdminPrompt = renderMessageSettingTemplate(localizedPrompt, commonVariables);
+    const body = await composeEmailBody({ hardcodedBody: template.body, renderedAdminPrompt });
     sms = appendUniqueBlock(sms, smsFooter);
     return { subject, body, display_body: stripReplySystemLines(body), html: buildEmailHtml(body), sms };
   }
@@ -351,11 +375,9 @@ const buildNotificationPreview = async ({ templateType, ticket, language, settin
     emailTemplates.repairReady[language]?.(localizedTicket) ||
     emailTemplates.repairReady.sv(localizedTicket);
   const subject = await translateIfNeeded(template.subject, language);
-  let body = await translateIfNeeded(template.body, language);
   const localizedReadyPrompt = await getLocalizedSetting(activeSettings.ready_prompt_by_lang, language);
-  body = appendUniqueBlock(body, renderMessageSettingTemplate(localizedReadyPrompt, commonVariables));
-  body = appendUniqueBlock(body, emailFooter);
-  body = appendReplyGuidance(body, language, replyToken);
+  const renderedAdminPrompt = renderMessageSettingTemplate(localizedReadyPrompt, commonVariables);
+  const body = await composeEmailBody({ hardcodedBody: template.body, renderedAdminPrompt });
   sms = appendUniqueBlock(sms, smsFooter);
   return { subject, body, display_body: stripReplySystemLines(body), html: buildEmailHtml(body), sms };
 };
