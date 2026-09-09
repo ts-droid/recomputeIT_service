@@ -188,6 +188,8 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets, onDelete, tenant
 
   const hasLoadedMessagesRef = React.useRef(false);
 
+  const prevMessageCountRef = React.useRef(0);
+
   const loadMessages = useCallback(async () => {
     if (!token) return;
     if (!hasLoadedMessagesRef.current) setLoadingMessages(true);
@@ -199,7 +201,9 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets, onDelete, tenant
       });
       if (!response.ok) throw new Error('Kunde inte hämta kommunikationslogg.');
       const data = await response.json();
-      setMessages(Array.isArray(data) ? data : []);
+      const loaded = Array.isArray(data) ? data : [];
+      setMessages(loaded);
+      prevMessageCountRef.current = loaded.length;
       hasLoadedMessagesRef.current = true;
     } catch (error) {
       console.error(error);
@@ -208,8 +212,6 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets, onDelete, tenant
       setLoadingMessages(false);
     }
   }, [API_BASE_URL, ticket.id, token]);
-
-  const prevMessageCountRef = React.useRef(0);
 
   const pollMessages = useCallback(async () => {
     if (!token) return;
@@ -234,9 +236,7 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets, onDelete, tenant
 
   useEffect(() => {
     if (isOpen) {
-      loadMessages().then(() => {
-        prevMessageCountRef.current = messages.length;
-      });
+      loadMessages();
 
       const pollInterval = window.setInterval(pollMessages, 15000);
       return () => window.clearInterval(pollInterval);
@@ -350,15 +350,17 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets, onDelete, tenant
     }
   };
 
-  const handleAssignTechnician = (userId) => {
+  const handleAssignTechnician = async (userId) => {
     if (userId === '_unassign') {
-      onUpdate(ticket.id, { assigned_to: null, assigned_to_name: null });
+      const updated = await onUpdate(ticket.id, { assigned_to: null, assigned_to_name: null });
+      if (!updated) return; // onUpdate already showed an error toast
       toast({ title: 'Tilldelning borttagen', description: `Ärende #${ticket.ticket_number} har ingen tilldelad tekniker.` });
       return;
     }
     const selectedUser = tenantUsers.find((u) => u.id === userId);
     if (!selectedUser) return;
-    onUpdate(ticket.id, { assigned_to: userId, assigned_to_name: selectedUser.name || selectedUser.email });
+    const updated = await onUpdate(ticket.id, { assigned_to: userId, assigned_to_name: selectedUser.name || selectedUser.email });
+    if (!updated) return;
     toast({ title: 'Tekniker tilldelad', description: `${selectedUser.name || selectedUser.email} tilldelad ärende #${ticket.ticket_number}.` });
   };
 
@@ -517,7 +519,8 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets, onDelete, tenant
         throw new Error('Utskriftsfönster blockerades.');
       }
 
-      await onUpdate(ticket.id, { status: 'Avslutad', work_done_summary: workDoneSummary });
+      const updated = await onUpdate(ticket.id, { status: 'Avslutad', work_done_summary: workDoneSummary });
+      if (!updated) return; // onUpdate already showed an error toast
 
       toast({
         title: "Ärende avslutat!",
@@ -545,10 +548,11 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets, onDelete, tenant
 
     setIsProcessing(true);
     try {
-      await onUpdate(ticket.id, {
+      const updated = await onUpdate(ticket.id, {
         status: 'Avslutad',
         work_done_summary: workDoneSummary || 'Avslutad utan åtgärd (kostnadsförslag nekat).',
       });
+      if (!updated) return; // onUpdate already showed an error toast
       toast({
         title: 'Ärende avslutat',
         description: `Ärende #${ticket.ticket_number} avslutades utan åtgärd.`,
@@ -608,7 +612,8 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets, onDelete, tenant
       }
     }
     if (Object.keys(changed).length > 0) {
-      await onUpdate(ticket.id, changed);
+      const updated = await onUpdate(ticket.id, changed);
+      if (!updated) return; // keep the dialog open so the user can retry
       toast({ title: 'Ärende uppdaterat', description: `Ärende #${ticket.ticket_number} har uppdaterats.` });
     }
     setIsEditOpen(false);
@@ -984,7 +989,8 @@ export const TicketRow = ({ ticket, onUpdate, onRefreshTickets, onDelete, tenant
                                if (costProposal && !finalCost) {
                                  updates.final_cost = costProposal;
                                }
-                               await onUpdate(ticket.id, updates);
+                               const updated = await onUpdate(ticket.id, updates);
+                               if (!updated) return;
                                toast({
                                  title: 'Kostnadsförslag hoppas över',
                                  description: 'Ärendet går vidare till arbete pågår. Kostnad antas vara överenskommen muntligt.',

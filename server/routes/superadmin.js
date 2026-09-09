@@ -3,6 +3,7 @@ import { query } from '../db.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { clearTenantCache } from '../middleware/tenant.js';
 import bcrypt from 'bcryptjs';
+import { ROLE_RANK } from '../lib/constants.js';
 
 const router = Router();
 
@@ -75,7 +76,7 @@ router.get('/tenants', ...sa, async (req, res) => {
   try {
     const { rows } = await query(
       `SELECT id, slug, name, support_email, support_phone, brand_config,
-              smtp_config, sms_config, is_active, created_at, updated_at
+              is_active, created_at, updated_at
        FROM tenants
        ORDER BY created_at ASC`
     );
@@ -191,13 +192,17 @@ router.post('/tenants/:id/users', ...sa, async (req, res) => {
     if (!email || !password || !role) {
       return res.status(400).json({ error: 'email, password och role krävs.' });
     }
+    if (!ROLE_RANK[role]) {
+      return res.status(400).json({ error: 'Ogiltig roll.' });
+    }
 
     const hash = await bcrypt.hash(password, 10);
+    // Login lowercases the email, so store it lowercased or the user can never sign in.
     const { rows } = await query(
       `INSERT INTO users (tenant_id, email, password_hash, name, role)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING id, email, name, role, created_at`,
-      [tenantId, email, hash, name || null, role]
+      [tenantId, String(email).trim().toLowerCase(), hash, name || null, role]
     );
 
     res.status(201).json(rows[0]);

@@ -79,6 +79,9 @@ const escapeHtml = (value) =>
 export const printDocuments = (ticket, language = 'sv') => {
   const t = printTranslations[language] || printTranslations.sv;
   const printWindow = window.open('', '_blank');
+  // Popup blockers (kiosk browsers, Safari) return null here. Throwing after the
+  // ticket was already created makes staff re-submit and create duplicates.
+  if (!printWindow) return false;
   const creationDate = new Date(ticket.created_at);
   const currentDate = creationDate.toLocaleDateString(language === 'sv' ? 'sv-SE' : 'en-CA');
   const currentTime = creationDate.toLocaleTimeString(language === 'sv' ? 'sv-SE' : 'en-US', { hour: '2-digit', minute: '2-digit' });
@@ -203,7 +206,7 @@ export const printFinalReceipt = (ticket, enhancedSummary, language = 'sv') => {
   const printWindow = window.open('', '_blank');
   if (!printWindow) return Promise.resolve(false);
   const currentDate = new Date().toLocaleDateString(language === 'sv' ? 'sv-SE' : 'en-CA');
-  const finalCostValue = ticket.final_cost || 'Ej angiven';
+  const finalCostValue = escapeHtml(ticket.final_cost || 'Ej angiven');
 
   printWindow.document.write(`
     <!DOCTYPE html>

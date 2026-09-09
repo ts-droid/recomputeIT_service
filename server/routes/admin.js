@@ -8,12 +8,18 @@ import { ROLE_RANK } from '../lib/constants.js';
 import { sendEmail } from '../services/email.js';
 import { buildEmailHtml } from '../services/email-parsing.js';
 
-const generatePassword = () => crypto.randomBytes(6).toString('base64url');
 import {
   mergeMessageSettings,
   getAdminMessageSettings,
   autoTranslateMessageSettings,
 } from '../services/message-settings.js';
+
+const generatePassword = () => crypto.randomBytes(6).toString('base64url');
+
+// A user may only grant roles at or below their own level. Without this a
+// tenant admin could create a superadmin and gain cross-tenant access.
+const canGrantRole = (actorRole, targetRole) =>
+  (ROLE_RANK[targetRole] || 0) <= (ROLE_RANK[actorRole] || 0);
 
 const router = Router();
 
@@ -30,12 +36,15 @@ router.post('/users', requireAuth, requireRole('admin'), requireTenant, async (r
     if (!ROLE_RANK[role]) {
       return res.status(400).json({ error: 'Ogiltig roll.' });
     }
+    if (!canGrantRole(req.user.role, role)) {
+      return res.status(403).json({ error: 'Du kan inte tilldela en högre roll än din egen.' });
+    }
 
     const password = generatePassword();
     const hash = await bcrypt.hash(password, 10);
     const { rows } = await query(
       'INSERT INTO users (tenant_id, email, password_hash, role, name) VALUES ($1,$2,$3,$4,$5) RETURNING id, email, role, name',
-      [req.tenantId, email.toLowerCase(), hash, role, name || null]
+      [req.tenantId, email.trim().toLowerCase(), hash, role, name || null]
     );
 
     // Send credentials to the new user
@@ -73,6 +82,20 @@ router.patch('/users/:id', requireAuth, requireRole('admin'), requireTenant, asy
 
     if (role && !ROLE_RANK[role]) {
       return res.status(400).json({ error: 'Ogiltig roll.' });
+    }
+    if (role && !canGrantRole(req.user.role, role)) {
+      return res.status(403).json({ error: 'Du kan inte tilldela en högre roll än din egen.' });
+    }
+
+    const { rows: targetRows } = await query(
+      'SELECT role FROM users WHERE id = $1 AND tenant_id = $2',
+      [id, req.tenantId]
+    );
+    if (!targetRows[0]) {
+      return res.status(404).json({ error: 'Användare hittades inte.' });
+    }
+    if (!canGrantRole(req.user.role, targetRows[0].role)) {
+      return res.status(403).json({ error: 'Du kan inte ändra en användare med högre roll än din egen.' });
     }
 
     const { rows } = await query(
@@ -220,7 +243,7 @@ router.post('/test-email', requireAuth, requireRole('admin'), requireTenant, asy
       return res.status(400).json({ error: 'Mottagare saknas.' });
     }
 
-    const subject = 'Testmail från re:Compute-IT';
+    const subject = `Testmail från ${req.tenant?.name || 're:Compute-IT'}`;
     const body = 'Detta är ett testmail från systemet. Om du ser detta fungerar SMTP.';
 
     await sendEmail({ to, subject, body, html: buildEmailHtml(body) });

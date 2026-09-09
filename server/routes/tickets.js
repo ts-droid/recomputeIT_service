@@ -3,12 +3,16 @@ import { query } from '../db.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { requireTenant } from '../middleware/tenant.js';
 import { DEEPSEEK_API_KEY, DEEPSEEK_MODEL } from '../lib/constants.js';
-import { normalizePhone, normalizePreferredChannel, getLanguage } from '../services/phone.js';
+import {
+  normalizePhone,
+  normalizePreferredChannel,
+  getLanguage,
+  resolvePreferredContactChannel,
+} from '../services/phone.js';
 import { translateText, translateIfNeeded, normalizeComparableText } from '../services/translation.js';
 import { buildEmailHtml, generateReplyToken, appendReplyGuidance } from '../services/email-parsing.js';
 import { sendEmail } from '../services/email.js';
 import { sendSms } from '../services/sms.js';
-import { resolvePreferredContactChannel } from '../services/phone.js';
 import { getAdminMessageSettings, DEFAULT_MESSAGE_SETTINGS, mergeMessageSettings } from '../services/message-settings.js';
 import { standardizeActionsText } from '../services/notifications.js';
 
@@ -267,6 +271,20 @@ router.patch('/:id', requireAuth, requireRole('base'), requireTenant, async (req
 
     if (Object.prototype.hasOwnProperty.call(updates, 'preferred_contact_channel')) {
       updates.preferred_contact_channel = normalizePreferredChannel(updates.preferred_contact_channel) || null;
+    }
+
+    if (updates.assigned_to) {
+      // assigned_to is only FK-checked against users, not against this tenant.
+      const { rows: techRows } = await query(
+        'SELECT id, name, email FROM users WHERE id = $1 AND tenant_id = $2',
+        [updates.assigned_to, req.tenantId]
+      );
+      if (!techRows[0]) {
+        return res.status(400).json({ error: 'Ogiltig tekniker.' });
+      }
+      if (!updates.assigned_to_name) {
+        updates.assigned_to_name = techRows[0].name || techRows[0].email;
+      }
     }
 
     const fields = Object.keys(updates).filter((key) => allowedFields.has(key));
@@ -571,7 +589,7 @@ router.post('/:id/actions/standardize', requireAuth, requireRole('base'), requir
       return res.status(404).json({ error: 'Ärende hittades inte.' });
     }
 
-    const { standardized, via } = await standardizeActionsText(sourceText);
+    const { standardized, via } = await standardizeActionsText(sourceText, { tenantId: req.tenantId });
     return res.json({ ok: true, standardized_actions: standardized, via });
   } catch (error) {
     console.error('POST /api/tickets/:id/actions/standardize error:', error);

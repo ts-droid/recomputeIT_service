@@ -17,6 +17,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+// Railway/cloud proxies terminate TLS and forward the client IP in X-Forwarded-For.
+// Without this, req.ip is the proxy address and login rate limiting applies to everyone at once.
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 8080;
 const DIST_DIR = path.resolve(__dirname, '..', 'dist');
 
@@ -67,12 +70,32 @@ app.use('/api/superadmin', superadminRoutes);
 app.use('/api', notificationRoutes);
 app.use('/api/webhooks', webhookRoutes);
 
+// Unknown API routes should answer with JSON, not the SPA shell.
+app.use('/api', (_req, res) => {
+  res.status(404).json({ error: 'Not found.' });
+});
+
 // ---------------------------------------------------------------------------
 // Serve frontend (SPA fallback)
 // ---------------------------------------------------------------------------
 app.use(express.static(DIST_DIR));
 app.get('*', (_req, res) => {
   res.sendFile(path.join(DIST_DIR, 'index.html'));
+});
+
+// ---------------------------------------------------------------------------
+// Error handler (malformed JSON bodies, oversized payloads, unexpected throws)
+// ---------------------------------------------------------------------------
+// eslint-disable-next-line no-unused-vars
+app.use((error, _req, res, _next) => {
+  if (error?.type === 'entity.parse.failed') {
+    return res.status(400).json({ error: 'Ogiltig JSON i anropet.' });
+  }
+  if (error?.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'Anropet är för stort.' });
+  }
+  console.error('Unhandled request error:', error);
+  return res.status(500).json({ error: 'Internt serverfel.' });
 });
 
 // ---------------------------------------------------------------------------

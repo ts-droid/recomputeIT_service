@@ -14,9 +14,9 @@ router.get('/brand', requireAuth, requireTenant, (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// GET /  — list all tenants (super-admin only)
+// GET /  — list all tenants (superadmin only; cross-tenant data)
 // ---------------------------------------------------------------------------
-router.get('/', requireAuth, requireRole('admin'), requireTenant, async (req, res) => {
+router.get('/', requireAuth, requireRole('superadmin'), requireTenant, async (req, res) => {
   try {
     const { rows } = await query(
       'SELECT id, slug, name, support_email, support_phone, is_active, created_at FROM tenants ORDER BY created_at ASC'
@@ -31,7 +31,7 @@ router.get('/', requireAuth, requireRole('admin'), requireTenant, async (req, re
 // ---------------------------------------------------------------------------
 // POST /  — create a new tenant (super-admin)
 // ---------------------------------------------------------------------------
-router.post('/', requireAuth, requireRole('admin'), requireTenant, async (req, res) => {
+router.post('/', requireAuth, requireRole('superadmin'), requireTenant, async (req, res) => {
   try {
     const { slug, name, support_email, support_phone, brand_config } = req.body || {};
     if (!slug || !name) {
@@ -58,7 +58,7 @@ router.post('/', requireAuth, requireRole('admin'), requireTenant, async (req, r
 // ---------------------------------------------------------------------------
 // PATCH /:id  — update tenant
 // ---------------------------------------------------------------------------
-router.patch('/:id', requireAuth, requireRole('admin'), requireTenant, async (req, res) => {
+router.patch('/:id', requireAuth, requireRole('superadmin'), requireTenant, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, support_email, support_phone, brand_config, smtp_config, sms_config, is_active } = req.body || {};

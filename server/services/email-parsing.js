@@ -659,15 +659,19 @@ export const parseInboundEmailPayload = (body) => {
 // ---------------------------------------------------------------------------
 export const extractTicketNumber = (subject = '', text = '') => {
   const content = `${subject}\n${text}`;
-  const patterns = [
+  const explicitPatterns = [
     /(?:ärende|arende|case)\s*#?\s*(\d{4,})/i,
     /#\s*(\d{4,})/,
-    /\b(\d{4,})\b/,
   ];
-  for (const pattern of patterns) {
+  for (const pattern of explicitPatterns) {
     const match = content.match(pattern);
     if (match?.[1]) return Number(match[1]);
   }
+  // A bare number is only trusted in the subject line. In the body it is far
+  // more likely to be a price, a year or a phone number than a ticket number,
+  // and a wrong match would attach the reply to another customer's ticket.
+  const bareSubjectMatch = String(subject || '').match(/\b(\d{5,})\b/);
+  if (bareSubjectMatch?.[1]) return Number(bareSubjectMatch[1]);
   return null;
 };
 

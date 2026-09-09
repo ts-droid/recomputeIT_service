@@ -25,7 +25,7 @@ const buildFallbackActionChecklist = (sourceText = '') =>
 
 const standardizeActionsText = async (sourceText = '', options = {}) => {
   const normalizedText = String(sourceText || '').trim();
-  if (!normalizedText) return '';
+  if (!normalizedText) return { standardized: '', via: 'empty' };
 
   const fallbackChecklist = buildFallbackActionChecklist(normalizedText);
   if (!DEEPSEEK_API_KEY) {
@@ -36,7 +36,7 @@ const standardizeActionsText = async (sourceText = '', options = {}) => {
     const messageSettings =
       options?.messageSettings && typeof options.messageSettings === 'object'
         ? mergeMessageSettings(options.messageSettings)
-        : await getAdminMessageSettings();
+        : await getAdminMessageSettings(options?.tenantId);
     const workDonePrompt =
       messageSettings?.ai_work_done_prompt || DEFAULT_MESSAGE_SETTINGS.ai_work_done_prompt;
 
@@ -193,7 +193,7 @@ const buildDecisionMessageTemplate = async ({ ticket, type, settings }) => {
 };
 
 const sendDecisionAcknowledgement = async ({ ticket, decision, channel, smsTo, emailTo }) => {
-  const settings = await getAdminMessageSettings();
+  const settings = await getAdminMessageSettings(ticket.tenant_id);
   const template = await buildDecisionMessageTemplate({
     ticket,
     type: decision === 'yes' ? 'approved' : 'declined',
@@ -203,9 +203,9 @@ const sendDecisionAcknowledgement = async ({ ticket, decision, channel, smsTo, e
   if (channel === 'sms' && smsTo && template.sms) {
     await sendSms({ to: smsTo, message: template.sms });
     await query(
-      `INSERT INTO message_logs (ticket_id, channel, direction, to_number, body, provider)
-       VALUES ($1,$2,$3,$4,$5,$6)`,
-      [ticket.id, 'sms', 'outbound', smsTo, template.sms, '46elks']
+      `INSERT INTO message_logs (tenant_id, ticket_id, channel, direction, to_number, body, provider)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [ticket.tenant_id, ticket.id, 'sms', 'outbound', smsTo, template.sms, '46elks']
     );
     return;
   }
@@ -219,15 +219,15 @@ const sendDecisionAcknowledgement = async ({ ticket, decision, channel, smsTo, e
       html: buildEmailHtml(plainBody),
     });
     await query(
-      `INSERT INTO message_logs (ticket_id, channel, direction, to_number, subject, body, provider)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [ticket.id, 'email', 'outbound', emailTo, template.subject || null, template.body || null, 'smtp']
+      `INSERT INTO message_logs (tenant_id, ticket_id, channel, direction, to_number, subject, body, provider)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [ticket.tenant_id, ticket.id, 'email', 'outbound', emailTo, template.subject || null, template.body || null, 'smtp']
     );
   }
 };
 
 const sendDecisionClarification = async ({ ticket, channel, smsTo, emailTo }) => {
-  const settings = await getAdminMessageSettings();
+  const settings = await getAdminMessageSettings(ticket.tenant_id);
   const template = await buildDecisionMessageTemplate({
     ticket,
     type: 'unclear',
@@ -237,9 +237,9 @@ const sendDecisionClarification = async ({ ticket, channel, smsTo, emailTo }) =>
   if (channel === 'sms' && smsTo && template.sms) {
     await sendSms({ to: smsTo, message: template.sms });
     await query(
-      `INSERT INTO message_logs (ticket_id, channel, direction, to_number, body, provider)
-       VALUES ($1,$2,$3,$4,$5,$6)`,
-      [ticket.id, 'sms', 'outbound', smsTo, template.sms, '46elks']
+      `INSERT INTO message_logs (tenant_id, ticket_id, channel, direction, to_number, body, provider)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [ticket.tenant_id, ticket.id, 'sms', 'outbound', smsTo, template.sms, '46elks']
     );
     return;
   }
@@ -255,9 +255,9 @@ const sendDecisionClarification = async ({ ticket, channel, smsTo, emailTo }) =>
       html: buildEmailHtml(bodyWithMarker),
     });
     await query(
-      `INSERT INTO message_logs (ticket_id, channel, direction, to_number, subject, body, reply_token, provider)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [ticket.id, 'email', 'outbound', emailTo, template.subject || null, bodyWithMarker, replyToken, 'smtp']
+      `INSERT INTO message_logs (tenant_id, ticket_id, channel, direction, to_number, subject, body, reply_token, provider)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [ticket.tenant_id, ticket.id, 'email', 'outbound', emailTo, template.subject || null, bodyWithMarker, replyToken, 'smtp']
     );
   }
 };

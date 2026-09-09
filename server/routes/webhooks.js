@@ -32,6 +32,13 @@ import {
 
 const resendWebhookVerifier = RESEND_WEBHOOK_SECRET ? new SvixWebhook(RESEND_WEBHOOK_SECRET) : null;
 
+if (!RESEND_WEBHOOK_SECRET && !EMAIL_WEBHOOK_SECRET) {
+  console.warn('WARNING: /api/webhooks/email-inbound is unauthenticated (set RESEND_WEBHOOK_SECRET or EMAIL_WEBHOOK_SECRET).');
+}
+if (!ELKS_WEBHOOK_SECRET) {
+  console.warn('WARNING: /api/webhooks/46elks is unauthenticated (set ELKS_WEBHOOK_SECRET).');
+}
+
 const router = Router();
 
 // ---------------------------------------------------------------------------
@@ -91,6 +98,11 @@ router.post('/email-inbound', async (req, res) => {
       if (!providedSecret || !timingSafeEqual(providedSecret, EMAIL_WEBHOOK_SECRET)) {
         return res.status(401).json({ error: 'Invalid webhook secret' });
       }
+    } else if (RESEND_WEBHOOK_SECRET) {
+      // A Resend secret is configured but the request carries no Svix signature
+      // headers: previously this fell through unauthenticated, letting anyone
+      // forge an inbound "JA" and approve a cost proposal.
+      return res.status(401).json({ error: 'Missing webhook signature' });
     }
 
     const inbound = parseInboundEmailPayload(parsedPayload);
@@ -221,7 +233,7 @@ router.post('/email-inbound', async (req, res) => {
     if (decision === 'yes') {
       const autoWorkDone = ticket.work_done_summary?.trim()
         ? ticket.work_done_summary.trim()
-        : (await standardizeActionsText(ticket.planned_actions || ticket.diagnosis || '')).standardized;
+        : (await standardizeActionsText(ticket.planned_actions || ticket.diagnosis || '', { tenantId: ticket.tenant_id })).standardized;
       await query(
         `UPDATE service_tickets
          SET cost_proposal_approved = true,
@@ -371,7 +383,7 @@ router.post('/46elks', async (req, res) => {
     if (decision === 'yes') {
       const autoWorkDone = ticket.work_done_summary?.trim()
         ? ticket.work_done_summary.trim()
-        : (await standardizeActionsText(ticket.planned_actions || ticket.diagnosis || '')).standardized;
+        : (await standardizeActionsText(ticket.planned_actions || ticket.diagnosis || '', { tenantId: ticket.tenant_id })).standardized;
       await client.query(
         `UPDATE service_tickets
          SET cost_proposal_approved = true,

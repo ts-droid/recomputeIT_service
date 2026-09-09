@@ -18,7 +18,6 @@ export default [
 			react: { version: 'detect' },
 			'import/resolver': {
 				node: { extensions: ['.js', '.jsx'] },
-				alias: { map: [['@', './src']], extensions: ['.js', '.jsx'] },
 			},
 		},
 		rules: {
@@ -42,6 +41,10 @@ export default [
 			// Critical rules that prevent runtime errors
 			'no-undef': 'error', // Undefined variables cause runtime errors
 
+			// The '@/…' alias is resolved by Vite (see vite.config.js). The previous
+			// 'alias' resolver was never installed, which made every file fail lint.
+			'import/no-unresolved': ['error', { ignore: ['^@/'] }],
+
 			// Override recommended import rules for stricter checking
 			'import/no-self-import': 'error', // Extremely fast rule, breaking results in infinite loop/bundling error
 
@@ -49,5 +52,5 @@ export default [
 			'import/no-cycle': 'off', // AI rarely makes this error, and the rule is very slow to run
 		},
 	},
-	{ files: ['tools/**/*.js', 'tailwind.config.js'], languageOptions: { globals: globals.node } },
+	{ files: ['tools/**/*.js', 'tailwind.config.js', 'server/**/*.js'], languageOptions: { globals: globals.node } },
 ];

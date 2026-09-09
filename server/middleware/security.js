@@ -23,7 +23,7 @@ const cleanupLoginAttempts = () => {
     if (now - entry.windowStart > LOGIN_RATE_WINDOW_MS) loginAttempts.delete(key);
   }
 };
-setInterval(cleanupLoginAttempts, 60_000);
+setInterval(cleanupLoginAttempts, 60_000).unref();
 
 export const checkLoginRateLimit = (ip) => {
   const now = Date.now();

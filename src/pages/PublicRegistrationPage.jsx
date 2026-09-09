@@ -157,20 +157,30 @@ export default function PublicRegistrationPage() {
         return;
       }
       
-      downloadServiceTicketPdf(newTicket, lang);
-      printDocuments(newTicket, lang);
-
-      toast({
-        title: t.toast.successTitle,
-        description: `${t.toast.successDescription} #${newTicket.ticket_number}. ${t.toast.printStarted} PDF skapad.`,
-      });
-      
+      // The ticket now exists. Reset the form BEFORE printing so a blocked popup
+      // or a print error cannot leave the filled-in form behind (which led staff
+      // to submit again and create duplicate tickets).
       setFormData({
         customer_name: '', customer_lastname: '', customer_phone_country_code: '+46', customer_email: '', customer_phone: '',
         preferred_contact_channel: '',
         device_type: '', device_model: '', issue_description: '', additional_notes: '',
       });
       setLanguage('sv');
+
+      toast({
+        title: t.toast.successTitle,
+        description: `${t.toast.successDescription} #${newTicket.ticket_number}. ${t.toast.printStarted} PDF skapad.`,
+      });
+
+      downloadServiceTicketPdf(newTicket, lang);
+      const didOpenPrint = printDocuments(newTicket, lang);
+      if (didOpenPrint === false) {
+        toast({
+          title: 'Utskrift blockerad',
+          description: `Ärende #${newTicket.ticket_number} är sparat, men webbläsaren blockerade utskriftsfönstret. Tillåt popup-fönster och skriv ut från ärendelistan.`,
+          variant: 'destructive',
+        });
+      }
 
     } catch (error) {
       console.error('Error submitting service ticket:', error);

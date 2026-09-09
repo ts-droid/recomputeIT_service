@@ -40,5 +40,11 @@ const pool = new Pool({
   ssl: sslConfig,
 });
 
+// An idle client losing its connection emits 'error' on the pool; without a
+// listener Node treats it as an uncaught exception and kills the process.
+pool.on('error', (error) => {
+  console.error('Unexpected error on idle PostgreSQL client:', error);
+});
+
 export const query = (text, params) => pool.query(text, params);
 export const getClient = () => pool.connect();

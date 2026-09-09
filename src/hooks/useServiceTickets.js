@@ -28,6 +28,18 @@ const apiFetch = async (path, options) => {
     headers: mergedHeaders,
   });
 
+  if (response.status === 401) {
+    // The token was revoked (login on another device, admin password reset).
+    // Clear the stale session so the user lands on the login page instead of
+    // being stuck on a dashboard where every request fails.
+    localStorage.removeItem('recomputeit_auth');
+    localStorage.removeItem('recomputeit_token');
+    if (window.location.pathname !== '/login') {
+      window.location.assign('/login');
+    }
+    throw new Error('Sessionen har gått ut. Logga in igen.');
+  }
+
   if (!response.ok) {
     const contentType = response.headers.get('content-type') || '';
     if (contentType.includes('application/json')) {

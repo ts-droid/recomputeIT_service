@@ -235,7 +235,7 @@ export async function initDb() {
   await query(`UPDATE users SET role = 'base' WHERE role = 'service'`);
 
   // 8. Bootstrap admin user
-  const adminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL;
+  const adminEmail = (process.env.BOOTSTRAP_ADMIN_EMAIL || '').trim().toLowerCase();
   const adminPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD;
   if (adminEmail && adminPassword) {
     const { rows } = await query(
@@ -253,7 +253,7 @@ export async function initDb() {
   }
 
   // 9. Bootstrap superadmin user
-  const superadminEmail = process.env.BOOTSTRAP_SUPERADMIN_EMAIL;
+  const superadminEmail = (process.env.BOOTSTRAP_SUPERADMIN_EMAIL || '').trim().toLowerCase();
   const superadminPassword = process.env.BOOTSTRAP_SUPERADMIN_PASSWORD;
   if (superadminEmail && superadminPassword) {
     const { rows } = await query(
